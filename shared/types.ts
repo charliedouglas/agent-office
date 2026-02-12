@@ -33,6 +33,7 @@ export type WSEventType =
   | 'agent_state_changed'
   | 'agent_moving'
   | 'agent_message'
+  | 'user_message'
   | 'task_updated'
   | 'init';
 

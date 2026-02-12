@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Agent } from '../entities/Agent';
 import { Desk } from '../entities/Desk';
 import { SocketClient } from '../network/Socket';
+import { ChatInput } from '../ui/ChatInput';
 import type { Agent as AgentData } from '../../../../shared/types';
 
 const TILE = 32;
@@ -26,6 +27,8 @@ export class OfficeScene extends Phaser.Scene {
   private desks: Desk[] = [];
   private socket!: SocketClient;
   private teamZoneGraphics!: Phaser.GameObjects.Graphics;
+  private chatInput!: ChatInput;
+  private currentChatAgent: Agent | null = null;
 
   constructor() {
     super({ key: 'OfficeScene' });
@@ -34,6 +37,7 @@ export class OfficeScene extends Phaser.Scene {
   create() {
     this.drawBaseFloor();
     this.teamZoneGraphics = this.add.graphics();
+    this.chatInput = new ChatInput(this);
 
     this.socket = new SocketClient();
     this.setupSocketHandlers();
@@ -147,7 +151,7 @@ export class OfficeScene extends Phaser.Scene {
         }
       }
 
-      agent.moveTo(destX, destY);
+      agent.moveToTile(destX, destY);
     });
 
     this.socket.on('agent_message', (payload: any) => {
@@ -190,7 +194,70 @@ export class OfficeScene extends Phaser.Scene {
     this.desks.push(desk);
 
     const agent = new Agent(this, data);
+    agent.setClickCallback((clickedAgent) => this.handleAgentClick(clickedAgent));
     this.agents.set(data.id, agent);
+  }
+
+  private handleAgentClick(agent: Agent) {
+    // Don't open if already chatting with this agent
+    if (this.chatInput.isVisible() && this.currentChatAgent === agent) {
+      return;
+    }
+
+    // Close existing chat if open
+    if (this.chatInput.isVisible()) {
+      this.chatInput.hide();
+    }
+
+    this.currentChatAgent = agent;
+
+    // Calculate screen position for chat input
+    const worldX = agent.x;
+    const worldY = agent.y;
+
+    // Convert world coordinates to screen coordinates
+    const camera = this.cameras.main;
+    const screenX = (worldX - camera.scrollX) * camera.zoom + camera.x;
+    const screenY = (worldY - camera.scrollY) * camera.zoom + camera.y;
+
+    // Position chat input near the agent
+    const chatX = screenX + 20;
+    const chatY = screenY - 60;
+
+    this.chatInput.show(
+      chatX,
+      chatY,
+      agent.getName(),
+      (message) => this.handleSendMessage(agent, message),
+      () => { this.currentChatAgent = null; }
+    );
+  }
+
+  private handleSendMessage(agent: Agent, message: string) {
+    console.log('[OfficeScene] Sending message to', agent.getName(), ':', message);
+
+    // Send message through WebSocket
+    this.socket.send('user_message', {
+      to: agent.getId(),
+      text: message,
+      timestamp: Date.now(),
+    });
+
+    // Show user's message as speech bubble above agent
+    agent.showMessage(`You: ${message}`);
+
+    // Mock agent response after a delay
+    setTimeout(() => {
+      const mockResponses = [
+        'Thanks for reaching out!',
+        'I\'ll look into that right away.',
+        'Great question! Let me think about it.',
+        'Noted! I\'m on it.',
+        'Thanks! I\'ll get back to you soon.',
+      ];
+      const response = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+      agent.showMessage(response);
+    }, 1500);
   }
 
   update() {}

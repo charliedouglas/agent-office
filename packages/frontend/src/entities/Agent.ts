@@ -21,7 +21,7 @@ const HAIR_COLORS = [0x2c1b0e, 0x4a3728, 0xb5651d, 0xd4a017, 0x8b0000, 0x1a1a2e,
 
 export class Agent extends Phaser.GameObjects.Container {
   private agentData: AgentData;
-  private body!: Phaser.GameObjects.Graphics;
+  private agentBody!: Phaser.GameObjects.Graphics;
   private nameLabel!: Phaser.GameObjects.Text;
   private roleLabel!: Phaser.GameObjects.Text;
   private stateIcon!: Phaser.GameObjects.Text;
@@ -29,6 +29,7 @@ export class Agent extends Phaser.GameObjects.Container {
   private typingTween: Phaser.Tweens.Tween | null = null;
   private speechBubble: Phaser.GameObjects.Container | null = null;
   private agentIndex: number;
+  private clickCallback?: (agent: Agent) => void;
 
   constructor(scene: Phaser.Scene, data: AgentData) {
     super(scene, data.x * TILE, data.y * TILE);
@@ -44,6 +45,15 @@ export class Agent extends Phaser.GameObjects.Container {
 
     scene.add.existing(this);
     this.setDepth(10);
+
+    // Enable click interaction
+    this.setSize(32, 32);
+    this.setInteractive({ useHandCursor: true });
+    this.on('pointerdown', () => {
+      if (this.clickCallback) {
+        this.clickCallback(this);
+      }
+    });
 
     // Start idle animation
     this.updateState(data.state);
@@ -103,7 +113,7 @@ export class Agent extends Phaser.GameObjects.Container {
       g.fillRect(-2, 2, 4, 2);
     }
 
-    this.body = g;
+    this.agentBody = g;
     this.add(g);
   }
 
@@ -141,7 +151,7 @@ export class Agent extends Phaser.GameObjects.Container {
     if (this.typingTween) {
       this.typingTween.stop();
       this.typingTween = null;
-      this.body.setY(0);
+      this.agentBody.setY(0);
     }
 
     switch (newState) {
@@ -152,7 +162,7 @@ export class Agent extends Phaser.GameObjects.Container {
         this.stateIcon.setText('⌨️');
         // Subtle bobbing animation
         this.typingTween = this.scene.tweens.add({
-          targets: this.body,
+          targets: this.agentBody,
           y: -1,
           duration: 300,
           yoyo: true,
@@ -169,7 +179,7 @@ export class Agent extends Phaser.GameObjects.Container {
     }
   }
 
-  moveTo(tileX: number, tileY: number, onComplete?: () => void) {
+  moveToTile(tileX: number, tileY: number, onComplete?: () => void) {
     this.updateState('walking');
 
     this.scene.tweens.add({
@@ -243,6 +253,12 @@ export class Agent extends Phaser.GameObjects.Container {
 
   getDeskX(): number { return this.agentData.deskPosition.x; }
   getDeskY(): number { return this.agentData.deskPosition.y; }
+  getId(): string { return this.agentData.id; }
+  getName(): string { return this.agentData.name; }
+
+  setClickCallback(callback: (agent: Agent) => void) {
+    this.clickCallback = callback;
+  }
 
   private hashCode(str: string): number {
     let hash = 0;

@@ -76,6 +76,16 @@ export class SocketClient {
     }
   }
 
+  send(eventType: string, payload: any) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const message = JSON.stringify({ type: eventType, payload });
+      this.ws.send(message);
+      console.log('[Socket] Sent:', eventType, payload);
+    } else {
+      console.warn('[Socket] Cannot send, not connected');
+    }
+  }
+
   disconnect() {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
