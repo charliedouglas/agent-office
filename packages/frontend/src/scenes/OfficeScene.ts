@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { Agent } from '../entities/Agent';
 import { Desk } from '../entities/Desk';
+import { TaskBoard } from '../entities/TaskBoard';
 import { SocketClient } from '../network/Socket';
 import { ChatInput } from '../ui/ChatInput';
-import type { Agent as AgentData } from '../../../../shared/types';
+import type { Agent as AgentData, Task } from '../../../../shared/types';
 
 const TILE = 32;
 const COLS = 20;
@@ -29,6 +30,7 @@ export class OfficeScene extends Phaser.Scene {
   private teamZoneGraphics!: Phaser.GameObjects.Graphics;
   private chatInput!: ChatInput;
   private currentChatAgent: Agent | null = null;
+  private taskBoard!: TaskBoard;
 
   constructor() {
     super({ key: 'OfficeScene' });
@@ -38,6 +40,9 @@ export class OfficeScene extends Phaser.Scene {
     this.drawBaseFloor();
     this.teamZoneGraphics = this.add.graphics();
     this.chatInput = new ChatInput(this);
+
+    // Create task board on the top wall
+    this.taskBoard = new TaskBoard(this, (COLS * TILE) / 2, TILE * 1.5);
 
     this.socket = new SocketClient();
     this.setupSocketHandlers();
@@ -118,10 +123,16 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private setupSocketHandlers() {
-    this.socket.on('init', (payload: { agents: AgentData[] }) => {
+    this.socket.on('init', (payload: { agents: AgentData[]; tasks?: Task[] }) => {
       console.log('[Office] Init:', payload.agents.length, 'agents');
       this.drawTeamZones(payload.agents);
       payload.agents.forEach(a => this.spawnAgent(a));
+
+      // Initialize tasks
+      if (payload.tasks) {
+        console.log('[Office] Init:', payload.tasks.length, 'tasks');
+        payload.tasks.forEach(t => this.taskBoard.addTask(t));
+      }
     });
 
     this.socket.on('agent_state_changed', (payload: { agentId: string; state: any }) => {
@@ -161,6 +172,11 @@ export class OfficeScene extends Phaser.Scene {
         fromAgent.showMessage(payload.text);
         setTimeout(() => fromAgent.updateState('idle'), 3000);
       }
+    });
+
+    this.socket.on('task_updated', (payload: Task) => {
+      console.log('[Office] Task updated:', payload.id, payload.status);
+      this.taskBoard.updateTask(payload);
     });
   }
 
