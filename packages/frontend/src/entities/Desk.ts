@@ -1,39 +1,37 @@
 import Phaser from 'phaser';
 
-const TILE_SIZE = 32;
+const TILE = 32;
 
-export class Desk extends Phaser.GameObjects.Graphics {
-  public gridX: number;
-  public gridY: number;
+export class Desk {
+  constructor(scene: Phaser.Scene, tileX: number, tileY: number, teamColor: number = 0x666666) {
+    const g = scene.add.graphics();
+    const px = tileX * TILE;
+    const py = tileY * TILE;
 
-  constructor(scene: Phaser.Scene, gridX: number, gridY: number) {
-    super(scene);
+    // Desk surface (dark wood)
+    g.fillStyle(0x5c4033, 1);
+    g.fillRect(px - 12, py + 4, 24, 14);
 
-    this.gridX = gridX;
-    this.gridY = gridY;
+    // Desk top highlight
+    g.fillStyle(0x7a5a45, 1);
+    g.fillRect(px - 11, py + 5, 22, 3);
 
-    this.drawDesk();
-    this.setPosition(gridX * TILE_SIZE, gridY * TILE_SIZE);
+    // Monitor (small rectangle on desk)
+    g.fillStyle(0x222233, 1);
+    g.fillRect(px - 5, py - 2, 10, 8);
 
-    scene.add.existing(this);
-  }
+    // Screen glow (team colored)
+    g.fillStyle(teamColor, 0.7);
+    g.fillRect(px - 4, py - 1, 8, 6);
 
-  private drawDesk() {
-    // Desk surface (brown)
-    this.fillStyle(0x8B4513, 1);
-    this.fillRect(-12, -8, 24, 16);
+    // Monitor stand
+    g.fillStyle(0x444444, 1);
+    g.fillRect(px - 1, py + 6, 2, 2);
 
-    // Desk legs
-    this.fillStyle(0x654321, 1);
-    this.fillRect(-10, 6, 3, 6);
-    this.fillRect(7, 6, 3, 6);
-
-    // Computer monitor (simple rectangle)
-    this.fillStyle(0x333333, 1);
-    this.fillRect(-6, -6, 12, 10);
-
-    // Screen
-    this.fillStyle(0x1a4d6d, 1);
-    this.fillRect(-5, -5, 10, 8);
+    // Chair (small circle behind desk)
+    g.fillStyle(0x333344, 1);
+    g.fillCircle(px, py + 22, 5);
+    g.fillStyle(0x444455, 1);
+    g.fillCircle(px, py + 22, 3);
   }
 }

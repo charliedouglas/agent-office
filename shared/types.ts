@@ -2,10 +2,13 @@
 
 export type AgentState = 'idle' | 'typing' | 'walking' | 'talking';
 
+export type AgentTeam = 'engineering' | 'design' | 'qa' | 'management';
+
 export interface Agent {
   id: string;
   name: string;
   role: string;
+  team: AgentTeam;
   state: AgentState;
   x: number;
   y: number;

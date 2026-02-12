@@ -1,150 +1,143 @@
 import Phaser from 'phaser';
 import { Agent } from '../entities/Agent';
 import { Desk } from '../entities/Desk';
-import { MovementSystem } from '../systems/Movement';
-import { MessageSystem } from '../systems/Messages';
 import { SocketClient } from '../network/Socket';
 import type { Agent as AgentData } from '../../../../shared/types';
 
-const TILE_SIZE = 32;
-const GRID_WIDTH = 20;
-const GRID_HEIGHT = 15;
+const TILE = 32;
+const COLS = 20;
+const ROWS = 15;
+
+// Team colors
+const TEAM_COLORS: Record<string, number> = {
+  engineering: 0x3b82f6,  // blue
+  design:      0xa855f7,  // purple
+  qa:          0x22c55e,  // green
+  management:  0xf59e0b,  // amber
+};
+
+// Team zone rects (for floor tinting) — { x, y, w, h } in tiles
+const TEAM_ZONES: Record<string, { x: number; y: number; w: number; h: number; label: string }> = {
+  engineering: { x: 2, y: 2, w: 5, h: 5, label: 'ENGINEERING' },
+  design:      { x: 12, y: 2, w: 5, h: 3, label: 'DESIGN' },
+  qa:          { x: 12, y: 9, w: 5, h: 3, label: 'QA' },
+  management:  { x: 2, y: 10, w: 3, h: 3, label: 'MANAGEMENT' },
+};
 
 export class OfficeScene extends Phaser.Scene {
   private agents: Map<string, Agent> = new Map();
   private desks: Desk[] = [];
-  private movementSystem!: MovementSystem;
-  private messageSystem!: MessageSystem;
   private socket!: SocketClient;
-
-  // Desk positions (8 desks arranged in office layout)
-  private deskPositions = [
-    { x: 2, y: 2 },
-    { x: 6, y: 2 },
-    { x: 10, y: 2 },
-    { x: 14, y: 2 },
-    { x: 2, y: 8 },
-    { x: 6, y: 8 },
-    { x: 10, y: 8 },
-    { x: 14, y: 8 }
-  ];
 
   constructor() {
     super({ key: 'OfficeScene' });
   }
 
   create() {
-    console.log('[OfficeScene] Creating scene...');
-
-    // Create programmatic office floor
-    this.createOfficeFloor();
-
-    // Create desks
-    this.createDesks();
-
-    // Initialize systems
-    this.movementSystem = new MovementSystem(GRID_WIDTH, GRID_HEIGHT);
-    this.messageSystem = new MessageSystem();
-
-    // Set up WebSocket connection
+    this.drawOffice();
     this.socket = new SocketClient();
     this.setupSocketHandlers();
     this.socket.connect();
 
-    // Enable camera controls
-    this.cameras.main.setZoom(1.5);
-    this.cameras.main.centerOn(
-      (GRID_WIDTH * TILE_SIZE) / 2,
-      (GRID_HEIGHT * TILE_SIZE) / 2
-    );
+    // Camera
+    this.cameras.main.setBackgroundColor('#111118');
+    this.cameras.main.centerOn((COLS * TILE) / 2, (ROWS * TILE) / 2);
   }
 
-  private createOfficeFloor() {
-    const graphics = this.add.graphics();
+  private drawOffice() {
+    const g = this.add.graphics();
 
-    // Draw a grid-based office floor
-    for (let y = 0; y < GRID_HEIGHT; y++) {
-      for (let x = 0; x < GRID_WIDTH; x++) {
-        const px = x * TILE_SIZE;
-        const py = y * TILE_SIZE;
+    // Base floor — dark
+    g.fillStyle(0x1a1a24, 1);
+    g.fillRect(0, 0, COLS * TILE, ROWS * TILE);
 
-        // Checkerboard pattern for floor tiles
+    // Floor grid (subtle)
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
         const isLight = (x + y) % 2 === 0;
-        graphics.fillStyle(isLight ? 0x2a2a2a : 0x242424, 1);
-        graphics.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-
-        // Grid lines
-        graphics.lineStyle(1, 0x1a1a1a, 0.3);
-        graphics.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+        g.fillStyle(isLight ? 0x22222e : 0x1e1e28, 1);
+        g.fillRect(x * TILE, y * TILE, TILE, TILE);
       }
     }
+
+    // Team zone highlights
+    for (const [team, zone] of Object.entries(TEAM_ZONES)) {
+      const color = TEAM_COLORS[team] ?? 0x444444;
+
+      // Tinted floor area
+      g.fillStyle(color, 0.08);
+      g.fillRect(zone.x * TILE, zone.y * TILE, zone.w * TILE, zone.h * TILE);
+
+      // Border
+      g.lineStyle(1, color, 0.3);
+      g.strokeRect(zone.x * TILE, zone.y * TILE, zone.w * TILE, zone.h * TILE);
+
+      // Label
+      const label = this.add.text(
+        (zone.x + zone.w / 2) * TILE,
+        zone.y * TILE - 8,
+        zone.label,
+        { fontSize: '9px', color: '#' + color.toString(16).padStart(6, '0'), fontFamily: 'monospace' }
+      );
+      label.setOrigin(0.5, 1);
+      label.setAlpha(0.6);
+    }
+
+    // Walls (top and left borders, thicker)
+    g.lineStyle(3, 0x444466, 0.8);
+    g.strokeRect(TILE, TILE, (COLS - 2) * TILE, (ROWS - 2) * TILE);
+
+    // "Door" gap bottom-centre
+    g.fillStyle(0x1a1a24, 1);
+    g.fillRect(9 * TILE, (ROWS - 1) * TILE - 1, 2 * TILE, 4);
+
+    // Water cooler / plant decorations
+    this.drawProp(g, 9, 6, 0x00aacc, '🚰');  // water cooler area
+    this.drawProp(g, 18, 1, 0x22aa44, '🌿');  // plant
+    this.drawProp(g, 1, 13, 0x22aa44, '🌿');  // plant
   }
 
-  private createDesks() {
-    this.deskPositions.forEach((pos) => {
-      const desk = new Desk(this, pos.x, pos.y);
-      this.desks.push(desk);
-    });
+  private drawProp(g: Phaser.GameObjects.Graphics, tx: number, ty: number, color: number, emoji: string) {
+    const text = this.add.text(tx * TILE + TILE / 2, ty * TILE + TILE / 2, emoji, { fontSize: '16px' });
+    text.setOrigin(0.5, 0.5);
+    text.setAlpha(0.5);
   }
 
   private setupSocketHandlers() {
-    // Handle initial state
     this.socket.on('init', (payload: { agents: AgentData[] }) => {
-      console.log('[OfficeScene] Received initial state:', payload);
-
-      payload.agents.forEach((agentData) => {
-        this.spawnAgent(agentData);
-      });
+      console.log('[Office] Init:', payload.agents.length, 'agents');
+      payload.agents.forEach(a => this.spawnAgent(a));
     });
 
-    // Handle agent state changes
     this.socket.on('agent_state_changed', (payload: { agentId: string; state: any }) => {
-      const agent = this.agents.get(payload.agentId);
-      if (agent) {
-        agent.updateState(payload.state);
-      }
+      this.agents.get(payload.agentId)?.updateState(payload.state);
     });
 
-    // Handle agent movement
     this.socket.on('agent_moving', (payload: { agentId: string; toX: number; toY: number }) => {
-      const agent = this.agents.get(payload.agentId);
-      if (agent) {
-        agent.moveTo(payload.toX, payload.toY);
-      }
+      this.agents.get(payload.agentId)?.moveTo(payload.toX, payload.toY);
     });
 
-    // Handle agent messages
     this.socket.on('agent_message', (payload: any) => {
       const fromAgent = this.agents.get(payload.from);
-      const toAgent = this.agents.get(payload.to);
-
-      if (fromAgent && toAgent) {
+      if (fromAgent) {
         fromAgent.updateState('talking');
         fromAgent.showMessage(payload.text);
-
-        setTimeout(() => {
-          fromAgent.updateState('idle');
-        }, 3000);
+        setTimeout(() => fromAgent.updateState('idle'), 3000);
       }
     });
   }
 
-  private spawnAgent(agentData: AgentData) {
-    if (this.agents.has(agentData.id)) {
-      return; // Agent already exists
-    }
+  private spawnAgent(data: AgentData) {
+    if (this.agents.has(data.id)) return;
 
-    const agent = new Agent(this, agentData);
-    this.agents.set(agentData.id, agent);
+    // Create desk first
+    const desk = new Desk(this, data.deskPosition.x, data.deskPosition.y, TEAM_COLORS[data.team] ?? 0x666666);
+    this.desks.push(desk);
 
-    // Make agent clickable
-    agent.on('pointerdown', () => {
-      console.log('[OfficeScene] Clicked agent:', agentData.name);
-      // TODO: Open chat dialog in future phase
-    });
+    // Create agent
+    const agent = new Agent(this, data);
+    this.agents.set(data.id, agent);
   }
 
-  update(time: number, delta: number) {
-    // Future: Add any per-frame updates here
-  }
+  update() {}
 }

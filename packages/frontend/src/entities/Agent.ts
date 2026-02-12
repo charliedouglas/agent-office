@@ -1,162 +1,248 @@
 import Phaser from 'phaser';
-import type { Agent as AgentData, AgentState } from '../../../../shared/types';
+import type { Agent as AgentData, AgentState, AgentTeam } from '../../../../shared/types';
 
-const TILE_SIZE = 32;
+const TILE = 32;
+
+// Team-based body colours
+const TEAM_BODY_COLORS: Record<string, number> = {
+  engineering: 0x3b82f6,
+  design:      0xa855f7,
+  qa:          0x22c55e,
+  management:  0xf59e0b,
+};
+
+// Unique skin/hair tones per agent index
+const SKIN_TONES = [0xf5d0a9, 0xd4a574, 0x8d5524, 0xffdbac, 0xc68642, 0xf1c27d, 0xe0ac69, 0xa0522d, 0xffd5b4];
+const HAIR_COLORS = [0x2c1b0e, 0x4a3728, 0xb5651d, 0xd4a017, 0x8b0000, 0x1a1a2e, 0x654321, 0xc0c0c0, 0xff6347];
 
 export class Agent extends Phaser.GameObjects.Container {
-  public data: AgentData;
-  private sprite: Phaser.GameObjects.Graphics;
-  private nameText: Phaser.GameObjects.Text;
-  private stateIndicator: Phaser.GameObjects.Graphics;
+  private agentData: AgentData;
+  private body!: Phaser.GameObjects.Graphics;
+  private nameLabel!: Phaser.GameObjects.Text;
+  private roleLabel!: Phaser.GameObjects.Text;
+  private stateIcon!: Phaser.GameObjects.Text;
   private currentState: AgentState;
+  private typingTween: Phaser.Tweens.Tween | null = null;
+  private speechBubble: Phaser.GameObjects.Container | null = null;
+  private agentIndex: number;
 
-  constructor(scene: Phaser.Scene, agentData: AgentData) {
-    super(scene, agentData.x * TILE_SIZE, agentData.y * TILE_SIZE);
+  constructor(scene: Phaser.Scene, data: AgentData) {
+    super(scene, data.x * TILE, data.y * TILE);
+    this.agentData = data;
+    this.currentState = data.state;
 
-    this.data = agentData;
-    this.currentState = agentData.state;
+    // Derive a stable index from agent id for colour variation
+    this.agentIndex = Math.abs(this.hashCode(data.id)) % SKIN_TONES.length;
 
-    // Create programmatic sprite
-    this.sprite = this.createAgentSprite(scene);
-    this.add(this.sprite);
-
-    // Create name label
-    this.nameText = scene.add.text(0, -20, agentData.name, {
-      fontSize: '10px',
-      color: '#ffffff',
-      backgroundColor: '#00000088',
-      padding: { x: 4, y: 2 }
-    });
-    this.nameText.setOrigin(0.5, 0.5);
-    this.add(this.nameText);
-
-    // State indicator (small icon)
-    this.stateIndicator = scene.add.graphics();
-    this.add(this.stateIndicator);
-    this.updateStateIndicator();
+    this.drawAgent(scene);
+    this.drawLabels(scene);
+    this.drawStateIcon(scene);
 
     scene.add.existing(this);
-    this.setInteractive(new Phaser.Geom.Rectangle(-16, -16, 32, 32), Phaser.Geom.Rectangle.Contains);
+    this.setDepth(10);
+
+    // Start idle animation
+    this.updateState(data.state);
   }
 
-  private createAgentSprite(scene: Phaser.Scene): Phaser.GameObjects.Graphics {
-    const graphics = scene.add.graphics();
+  private drawAgent(scene: Phaser.Scene) {
+    const g = scene.add.graphics();
+    const skin = SKIN_TONES[this.agentIndex];
+    const hair = HAIR_COLORS[this.agentIndex];
+    const shirt = TEAM_BODY_COLORS[this.agentData.team] ?? 0x666666;
 
-    // Generate unique color based on agent ID
-    const hue = this.hashCode(this.data.id) % 360;
-    const color = Phaser.Display.Color.HSVToRGB(hue / 360, 0.7, 0.9);
-    const hexColor = Phaser.Display.Color.GetColor(color.r, color.g, color.b);
-
-    // Draw a simple character (32x32 pixel art style)
-    // Head
-    graphics.fillStyle(hexColor, 1);
-    graphics.fillCircle(0, -8, 6);
-
-    // Body
-    graphics.fillRect(-4, 0, 8, 12);
-
-    // Arms
-    graphics.fillRect(-8, 2, 4, 8);
-    graphics.fillRect(4, 2, 4, 8);
+    // Shadow
+    g.fillStyle(0x000000, 0.2);
+    g.fillEllipse(0, 16, 14, 4);
 
     // Legs
-    graphics.fillRect(-4, 12, 3, 8);
-    graphics.fillRect(1, 12, 3, 8);
+    g.fillStyle(0x2a2a3a, 1);
+    g.fillRect(-3, 10, 3, 7);
+    g.fillRect(1, 10, 3, 7);
+
+    // Body / shirt
+    g.fillStyle(shirt, 1);
+    g.fillRoundedRect(-6, 0, 12, 12, 2);
+
+    // Arms
+    g.fillRect(-8, 2, 3, 8);
+    g.fillRect(5, 2, 3, 8);
+
+    // Hands (skin)
+    g.fillStyle(skin, 1);
+    g.fillCircle(-7, 10, 2);
+    g.fillCircle(6, 10, 2);
+
+    // Head (skin)
+    g.fillStyle(skin, 1);
+    g.fillCircle(0, -5, 6);
+
+    // Hair
+    g.fillStyle(hair, 1);
+    g.fillRect(-6, -11, 12, 5);
+    g.fillRect(-6, -9, 2, 3); // sideburn left
+    g.fillRect(4, -9, 2, 3);  // sideburn right
 
     // Eyes
-    graphics.fillStyle(0x000000, 1);
-    graphics.fillCircle(-2, -8, 1);
-    graphics.fillCircle(2, -8, 1);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(-2, -5, 2);
+    g.fillCircle(2, -5, 2);
+    g.fillStyle(0x222222, 1);
+    g.fillCircle(-2, -5, 1);
+    g.fillCircle(2, -5, 1);
 
-    return graphics;
+    // Manager gets a tie
+    if (this.agentData.team === 'management') {
+      g.fillStyle(0xcc3333, 1);
+      g.fillRect(-1, 2, 2, 8);
+      g.fillStyle(0xaa2222, 1);
+      g.fillRect(-2, 2, 4, 2);
+    }
+
+    this.body = g;
+    this.add(g);
+  }
+
+  private drawLabels(scene: Phaser.Scene) {
+    this.nameLabel = scene.add.text(0, -18, this.agentData.name, {
+      fontSize: '8px',
+      fontFamily: 'monospace',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 2,
+    });
+    this.nameLabel.setOrigin(0.5, 1);
+    this.add(this.nameLabel);
+
+    this.roleLabel = scene.add.text(0, 20, this.agentData.role, {
+      fontSize: '6px',
+      fontFamily: 'monospace',
+      color: '#888888',
+    });
+    this.roleLabel.setOrigin(0.5, 0);
+    this.add(this.roleLabel);
+  }
+
+  private drawStateIcon(scene: Phaser.Scene) {
+    this.stateIcon = scene.add.text(10, -14, '', {
+      fontSize: '10px',
+    });
+    this.add(this.stateIcon);
+  }
+
+  updateState(newState: AgentState) {
+    this.currentState = newState;
+
+    // Clean up old typing animation
+    if (this.typingTween) {
+      this.typingTween.stop();
+      this.typingTween = null;
+      this.body.setY(0);
+    }
+
+    switch (newState) {
+      case 'idle':
+        this.stateIcon.setText('');
+        break;
+      case 'typing':
+        this.stateIcon.setText('âŒ¨ï¸');
+        // Subtle bobbing animation
+        this.typingTween = this.scene.tweens.add({
+          targets: this.body,
+          y: -1,
+          duration: 300,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+        break;
+      case 'walking':
+        this.stateIcon.setText('ðŸš¶');
+        break;
+      case 'talking':
+        this.stateIcon.setText('ðŸ’¬');
+        break;
+    }
+  }
+
+  moveTo(tileX: number, tileY: number, onComplete?: () => void) {
+    this.updateState('walking');
+
+    this.scene.tweens.add({
+      targets: this,
+      x: tileX * TILE,
+      y: tileY * TILE,
+      duration: 1200,
+      ease: 'Quad.easeInOut',
+      onComplete: () => {
+        this.updateState('idle');
+        onComplete?.();
+      },
+    });
+  }
+
+  showMessage(text: string) {
+    // Remove existing bubble
+    if (this.speechBubble) {
+      this.speechBubble.destroy();
+      this.speechBubble = null;
+    }
+
+    const bubble = this.scene.add.container(this.x, this.y - 30);
+    bubble.setDepth(100);
+
+    // Background
+    const maxWidth = 120;
+    const padding = 6;
+    const bubbleText = this.scene.add.text(0, 0, text, {
+      fontSize: '8px',
+      fontFamily: 'monospace',
+      color: '#000000',
+      wordWrap: { width: maxWidth - padding * 2 },
+    });
+    bubbleText.setOrigin(0.5, 0.5);
+
+    const bgWidth = Math.min(bubbleText.width + padding * 2, maxWidth);
+    const bgHeight = bubbleText.height + padding * 2;
+
+    const bg = this.scene.add.graphics();
+    bg.fillStyle(0xffffff, 0.95);
+    bg.fillRoundedRect(-bgWidth / 2, -bgHeight / 2, bgWidth, bgHeight, 4);
+
+    // Little triangle pointer
+    bg.fillStyle(0xffffff, 0.95);
+    bg.fillTriangle(-3, bgHeight / 2, 3, bgHeight / 2, 0, bgHeight / 2 + 5);
+
+    // Border
+    bg.lineStyle(1, 0x888888, 0.5);
+    bg.strokeRoundedRect(-bgWidth / 2, -bgHeight / 2, bgWidth, bgHeight, 4);
+
+    bubble.add(bg);
+    bubble.add(bubbleText);
+
+    this.speechBubble = bubble;
+
+    // Float up and fade
+    this.scene.tweens.add({
+      targets: bubble,
+      y: bubble.y - 15,
+      alpha: 0,
+      duration: 600,
+      delay: 2500,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        bubble.destroy();
+        if (this.speechBubble === bubble) this.speechBubble = null;
+      },
+    });
   }
 
   private hashCode(str: string): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
       hash = hash & hash;
     }
-    return Math.abs(hash);
-  }
-
-  updateState(newState: AgentState) {
-    this.currentState = newState;
-    this.updateStateIndicator();
-  }
-
-  private updateStateIndicator() {
-    this.stateIndicator.clear();
-
-    let color: number;
-    let symbol: string;
-
-    switch (this.currentState) {
-      case 'idle':
-        color = 0x888888;
-        symbol = 'Ë';
-        break;
-      case 'typing':
-        color = 0x00ff00;
-        symbol = '(';
-        break;
-      case 'walking':
-        color = 0xffaa00;
-        symbol = '’';
-        break;
-      case 'talking':
-        color = 0x00aaff;
-        symbol = '=¬';
-        break;
-    }
-
-    // Draw a small colored circle
-    this.stateIndicator.fillStyle(color, 1);
-    this.stateIndicator.fillCircle(12, -12, 4);
-  }
-
-  moveTo(x: number, y: number, onComplete?: () => void) {
-    this.updateState('walking');
-
-    this.scene.tweens.add({
-      targets: this,
-      x: x * TILE_SIZE,
-      y: y * TILE_SIZE,
-      duration: 1000,
-      ease: 'Linear',
-      onComplete: () => {
-        this.updateState('idle');
-        onComplete?.();
-      }
-    });
-  }
-
-  showMessage(text: string) {
-    // Create a speech bubble
-    const bubble = this.scene.add.container(this.x, this.y - 40);
-
-    const bubbleText = this.scene.add.text(0, 0, text, {
-      fontSize: '12px',
-      color: '#000000',
-      backgroundColor: '#ffffff',
-      padding: { x: 8, y: 4 },
-      wordWrap: { width: 150 }
-    });
-    bubbleText.setOrigin(0.5, 0.5);
-
-    bubble.add(bubbleText);
-    this.scene.add.existing(bubble);
-
-    // Fade out after 3 seconds
-    this.scene.tweens.add({
-      targets: bubble,
-      alpha: 0,
-      duration: 500,
-      delay: 2500,
-      onComplete: () => {
-        bubble.destroy();
-      }
-    });
+    return hash;
   }
 }

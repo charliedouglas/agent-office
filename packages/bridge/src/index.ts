@@ -5,177 +5,162 @@ import { startWatcher } from './watcher.js';
 import { bridgeEvents } from './events.js';
 import type { Agent, AgentState } from '../../../shared/types.js';
 
-const MOCK_MODE = process.env.MOCK_MODE !== 'false'; // Default to true
+const MOCK_MODE = process.env.MOCK_MODE !== 'false';
 const WS_PORT = parseInt(process.env.WS_PORT || '3001');
 
 console.log(`
-TPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPW
-Q     Agent Office Bridge Server        Q
-ZPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP]
+┌────────────────────────────────────────┐
+│     Agent Office Bridge Server         │
+└────────────────────────────────────────┘
 `);
 
-// Start WebSocket server
 const wss = startWSServer(WS_PORT);
 
 if (MOCK_MODE) {
   console.log('[Mock Mode] Starting with fake data\n');
   startMockMode();
 } else {
-  // Start file watcher
   const teamsDir = path.join(os.homedir(), '.claude', 'teams');
   console.log('[Real Mode] Starting file watcher\n');
   startWatcher(teamsDir);
 }
 
-// Mock mode: Generate fake events for testing
 function startMockMode() {
+  // ── Desk clusters by team ──
+  // Engineering cluster (top-left, 2x2 facing inward)
+  // Design cluster (top-right, 2 desks)
+  // QA cluster (bottom-right, 2 desks)
+  // Manager (bottom-left, solo desk, slightly apart)
+
   const mockAgents: Agent[] = [
-    {
-      id: 'agent-1',
-      name: 'Alice',
-      role: 'Frontend Developer',
-      state: 'typing',
-      x: 2,
-      y: 2,
-      deskPosition: { x: 2, y: 2 }
-    },
-    {
-      id: 'agent-2',
-      name: 'Bob',
-      role: 'Backend Developer',
-      state: 'idle',
-      x: 6,
-      y: 2,
-      deskPosition: { x: 6, y: 2 }
-    },
-    {
-      id: 'agent-3',
-      name: 'Charlie',
-      role: 'DevOps Engineer',
-      state: 'typing',
-      x: 10,
-      y: 2,
-      deskPosition: { x: 10, y: 2 }
-    },
-    {
-      id: 'agent-4',
-      name: 'Diana',
-      role: 'QA Engineer',
-      state: 'idle',
-      x: 14,
-      y: 2,
-      deskPosition: { x: 14, y: 2 }
-    }
+    // Engineering (4 devs, clustered top-left)
+    { id: 'eng-1', name: 'Alice',   role: 'Senior Engineer',  team: 'engineering', state: 'typing', x: 3, y: 3, deskPosition: { x: 3, y: 3 } },
+    { id: 'eng-2', name: 'Bob',     role: 'Backend Engineer',  team: 'engineering', state: 'typing', x: 5, y: 3, deskPosition: { x: 5, y: 3 } },
+    { id: 'eng-3', name: 'Charlie', role: 'Frontend Engineer', team: 'engineering', state: 'idle',   x: 3, y: 5, deskPosition: { x: 3, y: 5 } },
+    { id: 'eng-4', name: 'Dave',    role: 'DevOps Engineer',   team: 'engineering', state: 'typing', x: 5, y: 5, deskPosition: { x: 5, y: 5 } },
+
+    // Design (2 designers, top-right)
+    { id: 'des-1', name: 'Eve',     role: 'UI Designer',       team: 'design', state: 'idle',   x: 13, y: 3, deskPosition: { x: 13, y: 3 } },
+    { id: 'des-2', name: 'Fiona',   role: 'UX Researcher',     team: 'design', state: 'typing', x: 15, y: 3, deskPosition: { x: 15, y: 3 } },
+
+    // QA (2 testers, bottom-right)
+    { id: 'qa-1',  name: 'George',  role: 'QA Lead',           team: 'qa', state: 'typing', x: 13, y: 10, deskPosition: { x: 13, y: 10 } },
+    { id: 'qa-2',  name: 'Hannah',  role: 'Test Engineer',     team: 'qa', state: 'idle',   x: 15, y: 10, deskPosition: { x: 15, y: 10 } },
+
+    // Management (solo, bottom-left, slightly separated)
+    { id: 'mgr-1', name: 'Marcus',  role: 'Engineering Manager', team: 'management', state: 'idle', x: 3, y: 11, deskPosition: { x: 3, y: 11 } },
   ];
 
   const mockTasks = [
-    {
-      id: 'task-1',
-      description: 'Build frontend office scene',
-      assignedTo: 'agent-1',
-      status: 'in_progress' as const
-    },
-    {
-      id: 'task-2',
-      description: 'Set up WebSocket bridge',
-      assignedTo: 'agent-2',
-      status: 'completed' as const
-    },
-    {
-      id: 'task-3',
-      description: 'Configure deployment pipeline',
-      assignedTo: 'agent-3',
-      status: 'pending' as const
-    },
-    {
-      id: 'task-4',
-      description: 'Write integration tests',
-      assignedTo: 'agent-4',
-      status: 'pending' as const
-    }
+    { id: 'task-1', description: 'Build frontend office scene',      assignedTo: 'eng-1', status: 'in_progress' as const },
+    { id: 'task-2', description: 'Set up WebSocket bridge',          assignedTo: 'eng-2', status: 'completed' as const },
+    { id: 'task-3', description: 'Configure deployment pipeline',    assignedTo: 'eng-4', status: 'in_progress' as const },
+    { id: 'task-4', description: 'Write integration tests',          assignedTo: 'qa-1',  status: 'pending' as const },
+    { id: 'task-5', description: 'Design agent sprites',             assignedTo: 'des-1', status: 'in_progress' as const },
+    { id: 'task-6', description: 'User research: office layout',     assignedTo: 'des-2', status: 'completed' as const },
   ];
 
-  // Send initial state
   setTimeout(() => {
     bridgeEvents.emitWSEvent({
       type: 'init',
-      payload: {
-        agents: mockAgents,
-        tasks: mockTasks
-      }
+      payload: { agents: mockAgents, tasks: mockTasks }
     });
     console.log('[Mock Mode] Sent initial state');
-  }, 1000);
+  }, 500);
 
-  // Periodically send random events
+  const messages = [
+    'Can you review my PR?',
+    'Sure, on it!',
+    'Build is green ✅',
+    'Nice work on that fix!',
+    'Syncing up in 5?',
+    'Found a bug in the parser.',
+    'PR approved 👍',
+    'Tests passing now.',
+    'Deploying to staging.',
+    'Can you check the logs?',
+    'Design looks great!',
+    'Mocks are ready for review.',
+    'Edge case found — filing a ticket.',
+    'Sprint review at 3.',
+    'Pushed a hotfix.',
+  ];
+
+  function pickRandom<T>(arr: T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function otherAgent(exclude: Agent): Agent {
+    const others = mockAgents.filter(a => a.id !== exclude.id);
+    return pickRandom(others);
+  }
+
+  // Main simulation — something every 2-3 seconds
   setInterval(() => {
-    const randomAgent = mockAgents[Math.floor(Math.random() * mockAgents.length)];
-    const states: AgentState[] = ['idle', 'typing', 'walking', 'talking'];
-    const newState = states[Math.floor(Math.random() * states.length)];
+    const agent = pickRandom(mockAgents);
+    const roll = Math.random();
 
-    randomAgent.state = newState;
-
-    bridgeEvents.emitWSEvent({
-      type: 'agent_state_changed',
-      payload: {
-        agentId: randomAgent.id,
-        state: newState
-      }
-    });
-
-    console.log(`[Mock Mode] ${randomAgent.name} -> ${newState}`);
-  }, 5000);
-
-  // Simulate agent movement occasionally
-  setInterval(() => {
-    const agent1 = mockAgents[0];
-    const agent2 = mockAgents[1];
-
-    bridgeEvents.emitWSEvent({
-      type: 'agent_moving',
-      payload: {
-        agentId: agent1.id,
-        fromX: agent1.x,
-        fromY: agent1.y,
-        toX: agent2.x,
-        toY: agent2.y
-      }
-    });
-
-    console.log(`[Mock Mode] ${agent1.name} walking to ${agent2.name}'s desk`);
-  }, 15000);
-
-  // Simulate messages
-  setInterval(() => {
-    const from = mockAgents[Math.floor(Math.random() * mockAgents.length)];
-    const to = mockAgents[Math.floor(Math.random() * mockAgents.length)];
-
-    if (from.id !== to.id) {
-      const messages = [
-        'Hey, can you help me with this?',
-        'Sure, I\'ll take a look!',
-        'The build is passing now.',
-        'Great work on that feature!',
-        'Let\'s sync up later.'
-      ];
-
+    if (roll < 0.25) {
+      // State change (idle/typing/talking)
+      const states: AgentState[] = ['idle', 'typing', 'typing', 'talking']; // bias toward typing
+      const newState = pickRandom(states);
+      agent.state = newState;
       bridgeEvents.emitWSEvent({
-        type: 'agent_message',
+        type: 'agent_state_changed',
+        payload: { agentId: agent.id, state: newState }
+      });
+      console.log(`[Mock] ${agent.name} → ${newState}`);
+
+    } else if (roll < 0.55) {
+      // Walk to another agent, chat, walk back
+      const target = otherAgent(agent);
+      bridgeEvents.emitWSEvent({
+        type: 'agent_moving',
         payload: {
-          id: `msg-${Date.now()}`,
-          from: from.id,
-          to: to.id,
-          text: messages[Math.floor(Math.random() * messages.length)],
-          timestamp: Date.now()
+          agentId: agent.id,
+          fromX: agent.x, fromY: agent.y,
+          toX: target.deskPosition.x, toY: target.deskPosition.y
         }
       });
+      console.log(`[Mock] ${agent.name} → walks to ${target.name}`);
 
-      console.log(`[Mock Mode] ${from.name} -> ${to.name}: message sent`);
+      setTimeout(() => {
+        const msg = pickRandom(messages);
+        bridgeEvents.emitWSEvent({
+          type: 'agent_message',
+          payload: { id: `msg-${Date.now()}`, from: agent.id, to: target.id, text: msg, timestamp: Date.now() }
+        });
+        console.log(`[Mock] ${agent.name} → ${target.name}: "${msg}"`);
+      }, 1500);
+
+      setTimeout(() => {
+        bridgeEvents.emitWSEvent({
+          type: 'agent_moving',
+          payload: {
+            agentId: agent.id,
+            fromX: target.deskPosition.x, fromY: target.deskPosition.y,
+            toX: agent.deskPosition.x, toY: agent.deskPosition.y
+          }
+        });
+        bridgeEvents.emitWSEvent({
+          type: 'agent_state_changed',
+          payload: { agentId: agent.id, state: 'typing' }
+        });
+      }, 4000);
+
+    } else {
+      // Speech bubble at desk
+      const target = otherAgent(agent);
+      const msg = pickRandom(messages);
+      bridgeEvents.emitWSEvent({
+        type: 'agent_message',
+        payload: { id: `msg-${Date.now()}`, from: agent.id, to: target.id, text: msg, timestamp: Date.now() }
+      });
+      console.log(`[Mock] ${agent.name} → ${target.name}: "${msg}"`);
     }
-  }, 10000);
+  }, 2500);
 }
 
-// Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n[Bridge] Shutting down...');
   wss.close();

@@ -7,7 +7,7 @@ export class SocketClient {
   private reconnectTimer: number | null = null;
   private eventHandlers: Map<string, Set<(payload: any) => void>> = new Map();
 
-  constructor(url: string = 'ws://localhost:3001') {
+  constructor(url: string = `ws://${window.location.hostname}:3001`) {
     this.url = url;
   }
 
