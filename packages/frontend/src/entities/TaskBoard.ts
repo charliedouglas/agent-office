@@ -26,10 +26,10 @@ function getAgentColor(agentId: string): number {
 
 export class TaskBoard {
   private scene: Phaser.Scene;
-  private container: Phaser.GameObjects.Container;
   private tasks: Map<string, TaskCard> = new Map();
-  private boardX: number;
-  private boardY: number;
+  private wallIcon!: Phaser.GameObjects.Container;
+  private overlayElement: HTMLDivElement | null = null;
+  private isOpen = false;
   private cardWidth = 90;
   private cardHeight = 32;
   private columnWidth = 100;
@@ -37,77 +37,356 @@ export class TaskBoard {
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
-    this.boardX = x;
-    this.boardY = y;
-    this.container = scene.add.container(x, y);
-    this.container.setDepth(5);
 
-    this.drawBoard();
+    // Create small wall icon instead of full board
+    this.createWallIcon(x, y);
+
+    // Create overlay HTML structure
+    this.createOverlayDOM();
   }
 
-  private drawBoard() {
-    const g = this.scene.add.graphics();
+  private createWallIcon(x: number, y: number) {
+    this.wallIcon = this.scene.add.container(x, y);
+    this.wallIcon.setDepth(5);
 
-    // Cork board background
-    const boardWidth = this.columnWidth * 3 + this.columnGap * 2 + 20;
-    const boardHeight = 280;
+    // Small clipboard/whiteboard icon (2 tiles wide, 1.5 tiles tall)
+    const iconWidth = 64; // 2 tiles
+    const iconHeight = 48; // 1.5 tiles
 
-    g.fillStyle(0xc19a6b, 1); // Cork color
-    g.fillRect(-boardWidth / 2, 0, boardWidth, boardHeight);
+    const bg = this.scene.add.graphics();
 
-    // Cork texture (small dots)
-    g.fillStyle(0xa68a5c, 0.3);
-    for (let i = 0; i < 80; i++) {
-      const dx = Math.random() * boardWidth - boardWidth / 2;
-      const dy = Math.random() * boardHeight;
-      g.fillCircle(dx, dy, 1);
+    // Clipboard backing
+    bg.fillStyle(0xc19a6b, 1); // Cork/wood color
+    bg.fillRoundedRect(-iconWidth / 2, 0, iconWidth, iconHeight, 4);
+
+    // Clip at top
+    bg.fillStyle(0x888888, 1);
+    bg.fillRoundedRect(-8, -2, 16, 6, 2);
+
+    // Frame
+    bg.lineStyle(2, 0x5c4033, 1);
+    bg.strokeRoundedRect(-iconWidth / 2, 0, iconWidth, iconHeight, 4);
+
+    // Simple task lines representation
+    bg.lineStyle(1, 0x2a2a2a, 0.5);
+    for (let i = 0; i < 3; i++) {
+      const lineY = 12 + i * 12;
+      bg.lineBetween(-20, lineY, 20, lineY);
     }
 
-    // Wood frame
-    g.lineStyle(8, 0x5c4033, 1);
-    g.strokeRect(-boardWidth / 2, 0, boardWidth, boardHeight);
+    this.wallIcon.add(bg);
 
-    this.container.add(g);
+    // Hover effect
+    const hitArea = new Phaser.Geom.Rectangle(-iconWidth / 2, 0, iconWidth, iconHeight);
+    this.wallIcon.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
 
-    // Column headers
-    const columns = [
-      { title: 'TO DO', x: -this.columnWidth - this.columnGap / 2 },
-      { title: 'IN PROGRESS', x: 0 },
-      { title: 'DONE', x: this.columnWidth + this.columnGap / 2 }
-    ];
-
-    columns.forEach(col => {
-      const header = this.scene.add.text(col.x, 10, col.title, {
-        fontSize: '9px',
-        fontFamily: 'monospace',
-        color: '#2a2a2a',
-        fontStyle: 'bold'
+    this.wallIcon.on('pointerover', () => {
+      this.scene.tweens.add({
+        targets: this.wallIcon,
+        scaleX: 1.1,
+        scaleY: 1.1,
+        duration: 100
       });
-      header.setOrigin(0.5, 0);
-      this.container.add(header);
+    });
 
-      // Pin/tack at top of each column
-      const pin = this.scene.add.graphics();
-      pin.fillStyle(0xcc3333, 1);
-      pin.fillCircle(col.x, 5, 3);
-      pin.fillStyle(0x888888, 1);
-      pin.fillCircle(col.x, 5, 1);
-      this.container.add(pin);
+    this.wallIcon.on('pointerout', () => {
+      this.scene.tweens.add({
+        targets: this.wallIcon,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 100
+      });
+    });
+
+    this.wallIcon.on('pointerdown', () => {
+      this.toggleOverlay();
     });
   }
 
-  private getColumnX(status: Task['status']): number {
-    switch (status) {
-      case 'pending': return -this.columnWidth - this.columnGap / 2;
-      case 'in_progress': return 0;
-      case 'completed': return this.columnWidth + this.columnGap / 2;
+  private createOverlayDOM() {
+    // Create overlay container
+    const overlay = document.createElement('div');
+    overlay.id = 'task-board-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    `;
+
+    // Create panel container
+    const panel = document.createElement('div');
+    panel.id = 'task-board-panel';
+    panel.style.cssText = `
+      background: #c19a6b;
+      border: 8px solid #5c4033;
+      border-radius: 8px;
+      padding: 20px;
+      width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      image-rendering: pixelated;
+      position: relative;
+    `;
+
+    // Cork texture background
+    panel.style.backgroundImage = `
+      radial-gradient(circle at 20% 30%, rgba(166, 138, 92, 0.3) 1px, transparent 1px),
+      radial-gradient(circle at 60% 70%, rgba(166, 138, 92, 0.3) 1px, transparent 1px),
+      radial-gradient(circle at 40% 50%, rgba(166, 138, 92, 0.3) 1px, transparent 1px)
+    `;
+    panel.style.backgroundSize = '20px 20px';
+
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #5c4033;
+      color: white;
+      border: 2px solid #3a2a1f;
+      border-radius: 4px;
+      width: 32px;
+      height: 32px;
+      font-size: 24px;
+      cursor: pointer;
+      font-family: monospace;
+      line-height: 1;
+      padding: 0;
+    `;
+    closeBtn.onmouseover = () => closeBtn.style.background = '#7a5043';
+    closeBtn.onmouseout = () => closeBtn.style.background = '#5c4033';
+    closeBtn.onclick = () => this.toggleOverlay();
+
+    // Title
+    const title = document.createElement('h2');
+    title.textContent = 'TASK BOARD';
+    title.style.cssText = `
+      margin: 0 0 20px 0;
+      font-family: monospace;
+      font-size: 18px;
+      color: #2a2a2a;
+      text-align: center;
+      font-weight: bold;
+    `;
+
+    // Kanban columns container
+    const columnsContainer = document.createElement('div');
+    columnsContainer.id = 'kanban-columns';
+    columnsContainer.style.cssText = `
+      display: flex;
+      gap: 10px;
+      justify-content: space-around;
+    `;
+
+    // Create three columns
+    const columns = [
+      { id: 'pending', title: 'TO DO', color: '#fff59d' },
+      { id: 'in_progress', title: 'IN PROGRESS', color: '#b3e5fc' },
+      { id: 'completed', title: 'DONE', color: '#c8e6c9' }
+    ];
+
+    columns.forEach(col => {
+      const column = document.createElement('div');
+      column.className = 'kanban-column';
+      column.dataset.status = col.id;
+      column.style.cssText = `
+        flex: 1;
+        min-width: 0;
+      `;
+
+      const header = document.createElement('div');
+      header.style.cssText = `
+        font-family: monospace;
+        font-size: 12px;
+        font-weight: bold;
+        color: #2a2a2a;
+        text-align: center;
+        margin-bottom: 10px;
+        position: relative;
+      `;
+      header.textContent = col.title;
+
+      // Pin/tack
+      const pin = document.createElement('div');
+      pin.style.cssText = `
+        width: 8px;
+        height: 8px;
+        background: #cc3333;
+        border: 1px solid #888888;
+        border-radius: 50%;
+        position: absolute;
+        top: -5px;
+        left: 50%;
+        transform: translateX(-50%);
+      `;
+      header.appendChild(pin);
+
+      const cardsContainer = document.createElement('div');
+      cardsContainer.className = 'cards-container';
+      cardsContainer.dataset.status = col.id;
+      cardsContainer.style.cssText = `
+        min-height: 100px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      `;
+
+      column.appendChild(header);
+      column.appendChild(cardsContainer);
+      columnsContainer.appendChild(column);
+    });
+
+    panel.appendChild(closeBtn);
+    panel.appendChild(title);
+    panel.appendChild(columnsContainer);
+    overlay.appendChild(panel);
+
+    // Close on background click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        this.toggleOverlay();
+      }
+    });
+
+    // Close on ESC key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isOpen) {
+        this.toggleOverlay();
+      }
+    });
+
+    document.body.appendChild(overlay);
+    this.overlayElement = overlay;
+  }
+
+  private toggleOverlay() {
+    if (!this.overlayElement) return;
+
+    this.isOpen = !this.isOpen;
+    this.overlayElement.style.display = this.isOpen ? 'flex' : 'none';
+
+    if (this.isOpen) {
+      // Refresh all task cards when opening
+      this.renderAllTasks();
     }
   }
 
-  private getNextY(status: Task['status']): number {
-    const cardsInColumn = Array.from(this.tasks.values())
-      .filter(card => card.task.status === status);
-    return 30 + cardsInColumn.length * (this.cardHeight + 8);
+  private renderAllTasks() {
+    if (!this.overlayElement) return;
+
+    // Clear all columns
+    const columns = this.overlayElement.querySelectorAll('.cards-container');
+    columns.forEach(col => col.innerHTML = '');
+
+    // Re-render all tasks
+    this.tasks.forEach(card => {
+      this.renderTaskCard(card.task);
+    });
+  }
+
+  private renderTaskCard(task: Task) {
+    if (!this.overlayElement) return;
+
+    const container = this.overlayElement.querySelector(`.cards-container[data-status="${task.status}"]`);
+    if (!container) return;
+
+    // Check if card already exists
+    const existingCard = container.querySelector(`[data-task-id="${task.id}"]`);
+    if (existingCard) {
+      existingCard.remove();
+    }
+
+    const colors = {
+      pending: '#fff59d',
+      in_progress: '#b3e5fc',
+      completed: '#c8e6c9'
+    };
+
+    const card = document.createElement('div');
+    card.dataset.taskId = task.id;
+    card.style.cssText = `
+      background: ${colors[task.status]};
+      border: 1px solid rgba(136, 136, 136, 0.3);
+      border-radius: 2px;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #2a2a2a;
+      box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: transform 0.1s;
+      position: relative;
+    `;
+
+    card.onmouseover = () => {
+      card.style.transform = 'scale(1.02)';
+      card.style.borderColor = '#444444';
+      card.style.borderWidth = '2px';
+    };
+    card.onmouseout = () => {
+      card.style.transform = 'scale(1)';
+      card.style.borderColor = 'rgba(136, 136, 136, 0.3)';
+      card.style.borderWidth = '1px';
+    };
+    card.onclick = () => this.showTaskDetailsOverlay(task);
+
+    const text = document.createElement('div');
+    text.textContent = task.description;
+    text.style.cssText = `
+      word-wrap: break-word;
+      margin-bottom: 4px;
+    `;
+
+    const meta = document.createElement('div');
+    meta.style.cssText = `
+      font-size: 9px;
+      color: #666;
+      margin-top: 4px;
+    `;
+    meta.textContent = `Assigned: ${task.assignedTo}`;
+
+    card.appendChild(text);
+    card.appendChild(meta);
+
+    // Agent dot for in-progress tasks
+    if (task.status === 'in_progress') {
+      const color = getAgentColor(task.assignedTo);
+      const dot = document.createElement('div');
+      dot.style.cssText = `
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 8px;
+        height: 8px;
+        background: #${color.toString(16).padStart(6, '0')};
+        border: 1px solid white;
+        border-radius: 50%;
+      `;
+      card.appendChild(dot);
+    }
+
+    container.appendChild(card);
+  }
+
+  private showTaskDetailsOverlay(task: Task) {
+    // Create a simple alert-style popup
+    const details = `
+Task: ${task.description}
+Status: ${task.status.replace('_', ' ').toUpperCase()}
+Assigned: ${task.assignedTo}
+ID: ${task.id}
+    `.trim();
+    alert(details);
   }
 
   addTask(task: Task) {
@@ -116,102 +395,19 @@ export class TaskBoard {
       return;
     }
 
-    const x = this.getColumnX(task.status);
-    const y = this.getNextY(task.status);
-
-    const cardContainer = this.scene.add.container(x, y);
-    cardContainer.setDepth(6);
-
-    // Sticky note background
-    const bg = this.scene.add.graphics();
-    const colors = {
-      pending: 0xfff59d,     // Yellow
-      in_progress: 0xb3e5fc, // Light blue
-      completed: 0xc8e6c9    // Light green
-    };
-    bg.fillStyle(colors[task.status], 1);
-    bg.fillRect(-this.cardWidth / 2, 0, this.cardWidth, this.cardHeight);
-
-    // Shadow
-    bg.fillStyle(0x000000, 0.1);
-    bg.fillRect(-this.cardWidth / 2 + 2, this.cardHeight, this.cardWidth, 2);
-
-    // Border
-    bg.lineStyle(1, 0x888888, 0.3);
-    bg.strokeRect(-this.cardWidth / 2, 0, this.cardWidth, this.cardHeight);
-
-    cardContainer.add(bg);
-
-    // Task text
-    const text = this.scene.add.text(0, this.cardHeight / 2, task.description, {
-      fontSize: '7px',
-      fontFamily: 'monospace',
-      color: '#2a2a2a',
-      wordWrap: { width: this.cardWidth - 12 },
-      align: 'center'
-    });
-    text.setOrigin(0.5, 0.5);
-    cardContainer.add(text);
-
-    // Agent dot for in-progress tasks
-    let dot: Phaser.GameObjects.Graphics | undefined;
-    if (task.status === 'in_progress') {
-      dot = this.scene.add.graphics();
-      const color = getAgentColor(task.assignedTo);
-      dot.fillStyle(color, 1);
-      dot.fillCircle(this.cardWidth / 2 - 6, 6, 4);
-      dot.lineStyle(1, 0xffffff, 1);
-      dot.strokeCircle(this.cardWidth / 2 - 6, 6, 4);
-      cardContainer.add(dot);
-    }
-
-    // Interactive
-    const hitArea = new Phaser.Geom.Rectangle(-this.cardWidth / 2, 0, this.cardWidth, this.cardHeight);
-    cardContainer.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
-
-    cardContainer.on('pointerover', () => {
-      bg.clear();
-      bg.fillStyle(colors[task.status], 1);
-      bg.fillRect(-this.cardWidth / 2, 0, this.cardWidth, this.cardHeight);
-      bg.lineStyle(2, 0x444444, 0.8);
-      bg.strokeRect(-this.cardWidth / 2, 0, this.cardWidth, this.cardHeight);
-      this.scene.tweens.add({
-        targets: cardContainer,
-        scaleX: 1.05,
-        scaleY: 1.05,
-        duration: 100
-      });
-    });
-
-    cardContainer.on('pointerout', () => {
-      bg.clear();
-      bg.fillStyle(colors[task.status], 1);
-      bg.fillRect(-this.cardWidth / 2, 0, this.cardWidth, this.cardHeight);
-      bg.fillStyle(0x000000, 0.1);
-      bg.fillRect(-this.cardWidth / 2 + 2, this.cardHeight, this.cardWidth, 2);
-      bg.lineStyle(1, 0x888888, 0.3);
-      bg.strokeRect(-this.cardWidth / 2, 0, this.cardWidth, this.cardHeight);
-      this.scene.tweens.add({
-        targets: cardContainer,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 100
-      });
-    });
-
-    cardContainer.on('pointerdown', () => {
-      this.showTaskDetails(task);
-    });
-
-    this.container.add(cardContainer);
-
+    // Store task data - rendering happens in DOM overlay
     this.tasks.set(task.id, {
       task,
-      container: cardContainer,
-      bg,
-      text,
-      dot
+      container: null as any,
+      bg: null as any,
+      text: null as any,
+      dot: undefined
     });
+
+    // If overlay is open, render the card immediately
+    if (this.isOpen) {
+      this.renderTaskCard(task);
+    }
   }
 
   updateTask(updatedTask: Task) {
@@ -227,164 +423,40 @@ export class TaskBoard {
     // Update the card's task data
     card.task = updatedTask;
 
-    if (oldStatus !== newStatus) {
-      // Animate completion
-      if (newStatus === 'completed') {
-        this.animateCompletion(card);
-      }
-
-      // Move to new column
-      const newX = this.getColumnX(newStatus);
-      const newY = this.getNextY(newStatus);
-
-      this.scene.tweens.add({
-        targets: card.container,
-        x: newX,
-        y: newY,
-        duration: 400,
-        ease: 'Quad.easeInOut',
-        onComplete: () => {
-          // Update background color
-          const colors = {
-            pending: 0xfff59d,
-            in_progress: 0xb3e5fc,
-            completed: 0xc8e6c9
-          };
-          card.bg.clear();
-          card.bg.fillStyle(colors[newStatus], 1);
-          card.bg.fillRect(-this.cardWidth / 2, 0, this.cardWidth, this.cardHeight);
-          card.bg.fillStyle(0x000000, 0.1);
-          card.bg.fillRect(-this.cardWidth / 2 + 2, this.cardHeight, this.cardWidth, 2);
-          card.bg.lineStyle(1, 0x888888, 0.3);
-          card.bg.strokeRect(-this.cardWidth / 2, 0, this.cardWidth, this.cardHeight);
-
-          // Update agent dot
-          if (card.dot) {
-            card.dot.destroy();
-            card.dot = undefined;
-          }
-          if (newStatus === 'in_progress') {
-            const dot = this.scene.add.graphics();
-            const color = getAgentColor(updatedTask.assignedTo);
-            dot.fillStyle(color, 1);
-            dot.fillCircle(this.cardWidth / 2 - 6, 6, 4);
-            dot.lineStyle(1, 0xffffff, 1);
-            dot.strokeCircle(this.cardWidth / 2 - 6, 6, 4);
-            card.container.add(dot);
-            card.dot = dot;
-          }
-        }
-      });
+    // If overlay is open, re-render the task
+    if (this.isOpen) {
+      this.renderTaskCard(updatedTask);
     }
 
-    // Update text
-    card.text.setText(updatedTask.description);
+    // Show completion animation if status changed to completed
+    if (oldStatus !== newStatus && newStatus === 'completed') {
+      this.showCompletionEffect();
+    }
   }
 
-  private animateCompletion(card: TaskCard) {
-    // Checkmark animation
-    const checkmark = this.scene.add.text(
-      card.container.x,
-      card.container.y + this.cardHeight / 2,
-      '✓',
-      {
-        fontSize: '24px',
-        color: '#22c55e',
-        fontStyle: 'bold'
-      }
-    );
-    checkmark.setOrigin(0.5, 0.5);
-    checkmark.setAlpha(0);
-    checkmark.setScale(0);
-    this.container.add(checkmark);
+  private showCompletionEffect() {
+    // Visual feedback for task completion - flash the wall icon
+    if (!this.wallIcon) return;
 
     this.scene.tweens.add({
-      targets: checkmark,
-      alpha: 1,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      duration: 200,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        this.scene.tweens.add({
-          targets: checkmark,
-          alpha: 0,
-          scaleX: 0.5,
-          scaleY: 0.5,
-          duration: 300,
-          delay: 400,
-          ease: 'Quad.easeIn',
-          onComplete: () => checkmark.destroy()
-        });
-      }
-    });
-
-    // Flash effect
-    this.scene.tweens.add({
-      targets: card.container,
+      targets: this.wallIcon,
       alpha: 0.5,
+      scaleX: 1.2,
+      scaleY: 1.2,
       duration: 100,
       yoyo: true,
-      repeat: 2
-    });
-  }
-
-  private showTaskDetails(task: Task) {
-    // Create a tooltip/popup
-    const popup = this.scene.add.container(this.boardX, this.boardY - 60);
-    popup.setDepth(200);
-
-    const popupWidth = 160;
-    const popupHeight = 60;
-
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(0x2a2a3a, 0.95);
-    bg.fillRoundedRect(-popupWidth / 2, 0, popupWidth, popupHeight, 4);
-    bg.lineStyle(2, 0x444466, 1);
-    bg.strokeRoundedRect(-popupWidth / 2, 0, popupWidth, popupHeight, 4);
-    popup.add(bg);
-
-    const titleText = this.scene.add.text(0, 8, task.description, {
-      fontSize: '9px',
-      fontFamily: 'monospace',
-      color: '#ffffff',
-      fontStyle: 'bold',
-      wordWrap: { width: popupWidth - 16 },
-      align: 'center'
-    });
-    titleText.setOrigin(0.5, 0);
-    popup.add(titleText);
-
-    const statusText = this.scene.add.text(0, 30, `Status: ${task.status.replace('_', ' ').toUpperCase()}`, {
-      fontSize: '7px',
-      fontFamily: 'monospace',
-      color: '#aaaaaa',
-      align: 'center'
-    });
-    statusText.setOrigin(0.5, 0);
-    popup.add(statusText);
-
-    const assignedText = this.scene.add.text(0, 42, `Assigned: ${task.assignedTo}`, {
-      fontSize: '7px',
-      fontFamily: 'monospace',
-      color: '#aaaaaa',
-      align: 'center'
-    });
-    assignedText.setOrigin(0.5, 0);
-    popup.add(assignedText);
-
-    // Close after delay or on click
-    this.scene.time.delayedCall(3000, () => {
-      popup.destroy();
-    });
-
-    this.scene.input.once('pointerdown', () => {
-      popup.destroy();
+      repeat: 2,
+      onComplete: () => {
+        this.wallIcon.setAlpha(1);
+        this.wallIcon.setScale(1);
+      }
     });
   }
 
   clear() {
-    this.tasks.forEach(card => card.container.destroy());
     this.tasks.clear();
+    if (this.isOpen) {
+      this.renderAllTasks();
+    }
   }
 }
