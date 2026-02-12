@@ -2,11 +2,13 @@ import path from 'path';
 import os from 'os';
 import { startWSServer } from './ws-server.js';
 import { startWatcher } from './watcher.js';
+import { startAPIServer } from './api.js';
 import { bridgeEvents } from './events.js';
 import type { Agent, AgentState } from '../../../shared/types.js';
 
 const MOCK_MODE = process.env.MOCK_MODE !== 'false';
 const WS_PORT = parseInt(process.env.WS_PORT || '3001');
+const API_PORT = parseInt(process.env.API_PORT || '3002');
 
 console.log(`
 ┌────────────────────────────────────────┐
@@ -15,14 +17,18 @@ console.log(`
 `);
 
 const wss = startWSServer(WS_PORT);
+const apiServer = startAPIServer(API_PORT);
 
 if (MOCK_MODE) {
   console.log('[Mock Mode] Starting with fake data\n');
   startMockMode();
 } else {
   const teamsDir = path.join(os.homedir(), '.claude', 'teams');
-  console.log('[Real Mode] Starting file watcher\n');
-  startWatcher(teamsDir);
+  const agentsDir = path.join(os.homedir(), '.agent');
+  console.log('[Real Mode] Starting file watchers\n');
+  console.log(`  - Teams: ${teamsDir}`);
+  console.log(`  - Agents: ${agentsDir}\n`);
+  startWatcher(teamsDir, agentsDir);
 }
 
 function startMockMode() {
@@ -174,7 +180,7 @@ function startMockMode() {
 
     if (roll < 0.5 && pendingTasks.length > 0) {
       // Move a pending task to in_progress
-      const task = pickRandom(pendingTasks);
+      const task: any = pickRandom(pendingTasks);
       task.status = 'in_progress';
       bridgeEvents.emitWSEvent({
         type: 'task_updated',
@@ -183,7 +189,7 @@ function startMockMode() {
       console.log(`[Mock] Task "${task.description}" → in_progress`);
     } else if (inProgressTasks.length > 0) {
       // Move an in_progress task to completed
-      const task = pickRandom(inProgressTasks);
+      const task: any = pickRandom(inProgressTasks);
       task.status = 'completed';
       bridgeEvents.emitWSEvent({
         type: 'task_updated',
@@ -197,5 +203,6 @@ function startMockMode() {
 process.on('SIGINT', () => {
   console.log('\n[Bridge] Shutting down...');
   wss.close();
+  apiServer.close();
   process.exit(0);
 });
