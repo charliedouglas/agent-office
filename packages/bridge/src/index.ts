@@ -35,36 +35,121 @@ function startMockMode() {
 
   const mockAgents: Agent[] = [
     // Engineering (4 devs, clustered top-left)
-    { id: 'eng-1', name: 'Alice',   role: 'Senior Engineer',  team: 'engineering', state: 'typing', x: 3, y: 3, deskPosition: { x: 3, y: 3 }, currentFile: 'src/OfficeScene.ts' },
-    { id: 'eng-2', name: 'Bob',     role: 'Backend Engineer',  team: 'engineering', state: 'typing', x: 5, y: 3, deskPosition: { x: 5, y: 3 }, currentFile: 'src/ws-server.ts' },
-    { id: 'eng-3', name: 'Charlie', role: 'Frontend Engineer', team: 'engineering', state: 'idle',   x: 3, y: 5, deskPosition: { x: 3, y: 5 }, currentFile: 'src/TaskBoard.ts' },
-    { id: 'eng-4', name: 'Dave',    role: 'DevOps Engineer',   team: 'engineering', state: 'typing', x: 5, y: 5, deskPosition: { x: 5, y: 5 }, currentFile: 'deploy/config.yml' },
+    {
+      id: 'eng-1', name: 'Alice', role: 'Senior Engineer', team: 'engineering',
+      state: 'typing', x: 3, y: 3, deskPosition: { x: 3, y: 3 },
+      currentFile: 'src/OfficeScene.ts',
+      plan: [
+        { text: 'Review component architecture', status: 'completed' },
+        { text: 'Build frontend office scene', status: 'in_progress' },
+        { text: 'Add sprite animations', status: 'pending' }
+      ]
+    },
+    {
+      id: 'eng-2', name: 'Bob', role: 'Backend Engineer', team: 'engineering',
+      state: 'typing', x: 5, y: 3, deskPosition: { x: 5, y: 3 },
+      currentFile: 'src/ws-server.ts',
+      plan: [
+        { text: 'Set up WebSocket bridge', status: 'completed' },
+        { text: 'Implement event system', status: 'completed' },
+        { text: 'Write API documentation', status: 'pending' }
+      ]
+    },
+    {
+      id: 'eng-3', name: 'Charlie', role: 'Frontend Engineer', team: 'engineering',
+      state: 'idle', x: 3, y: 5, deskPosition: { x: 3, y: 5 },
+      currentFile: 'src/TaskBoard.ts',
+      plan: [
+        { text: 'Implement task board UI', status: 'pending' },
+        { text: 'Add speech bubbles', status: 'pending' }
+      ]
+    },
+    {
+      id: 'eng-4', name: 'Dave', role: 'DevOps Engineer', team: 'engineering',
+      state: 'typing', x: 5, y: 5, deskPosition: { x: 5, y: 5 },
+      currentFile: 'deploy/config.yml',
+      plan: [
+        { text: 'Review deployment pipeline', status: 'completed' },
+        { text: 'Configure deployment pipeline', status: 'in_progress' },
+        { text: 'Set up monitoring', status: 'pending' }
+      ]
+    },
 
     // Design (2 designers, top-right)
-    { id: 'des-1', name: 'Eve',     role: 'UI Designer',       team: 'design', state: 'idle',   x: 13, y: 3, deskPosition: { x: 13, y: 3 }, currentFile: 'assets/sprites.png' },
-    { id: 'des-2', name: 'Fiona',   role: 'UX Researcher',     team: 'design', state: 'typing', x: 15, y: 3, deskPosition: { x: 15, y: 3 }, currentFile: 'docs/research.md' },
+    {
+      id: 'des-1', name: 'Eve', role: 'UI Designer', team: 'design',
+      state: 'idle', x: 13, y: 3, deskPosition: { x: 13, y: 3 },
+      currentFile: 'assets/sprites.png',
+      plan: [
+        { text: 'Sketch agent sprites', status: 'completed' },
+        { text: 'Design agent sprites', status: 'in_progress' },
+        { text: 'Create pixel art assets', status: 'pending' }
+      ]
+    },
+    {
+      id: 'des-2', name: 'Fiona', role: 'UX Researcher', team: 'design',
+      state: 'typing', x: 15, y: 3, deskPosition: { x: 15, y: 3 },
+      currentFile: 'docs/research.md',
+      plan: [
+        { text: 'User research: office layout', status: 'completed' },
+        { text: 'Analyze user feedback', status: 'pending' }
+      ]
+    },
 
     // QA (2 testers, bottom-right)
-    { id: 'qa-1',  name: 'George',  role: 'QA Lead',           team: 'qa', state: 'typing', x: 13, y: 10, deskPosition: { x: 13, y: 10 }, currentFile: 'tests/integration.spec.ts' },
-    { id: 'qa-2',  name: 'Hannah',  role: 'Test Engineer',     team: 'qa', state: 'idle',   x: 15, y: 10, deskPosition: { x: 15, y: 10 }, currentFile: 'tests/unit.spec.ts' },
+    {
+      id: 'qa-1', name: 'George', role: 'QA Lead', team: 'qa',
+      state: 'typing', x: 13, y: 10, deskPosition: { x: 13, y: 10 },
+      currentFile: 'tests/integration.spec.ts',
+      plan: [
+        { text: 'Write test plan', status: 'completed' },
+        { text: 'Write integration tests', status: 'pending' },
+        { text: 'Test agent movement', status: 'pending' }
+      ]
+    },
+    {
+      id: 'qa-2', name: 'Hannah', role: 'Test Engineer', team: 'qa',
+      state: 'idle', x: 15, y: 10, deskPosition: { x: 15, y: 10 },
+      currentFile: 'tests/unit.spec.ts',
+      plan: [
+        { text: 'Set up test environment', status: 'completed' },
+        { text: 'Run smoke tests', status: 'in_progress' }
+      ]
+    },
 
     // Management (solo, bottom-left, slightly separated)
-    { id: 'mgr-1', name: 'Marcus',  role: 'Engineering Manager', team: 'management', state: 'idle', x: 3, y: 11, deskPosition: { x: 3, y: 11 } },
+    {
+      id: 'mgr-1', name: 'Marcus', role: 'Engineering Manager', team: 'management',
+      state: 'idle', x: 3, y: 11, deskPosition: { x: 3, y: 11 },
+      plan: [
+        { text: 'Review sprint goals', status: 'completed' },
+        { text: 'Plan next iteration', status: 'pending' }
+      ]
+    },
   ];
 
-  const mockTasks = [
-    { id: 'task-1', description: 'Build frontend office scene',      assignedTo: 'eng-1', status: 'in_progress' as const },
-    { id: 'task-2', description: 'Set up WebSocket bridge',          assignedTo: 'eng-2', status: 'completed' as const },
-    { id: 'task-3', description: 'Configure deployment pipeline',    assignedTo: 'eng-4', status: 'in_progress' as const },
-    { id: 'task-4', description: 'Write integration tests',          assignedTo: 'qa-1',  status: 'pending' as const },
-    { id: 'task-5', description: 'Design agent sprites',             assignedTo: 'des-1', status: 'in_progress' as const },
-    { id: 'task-6', description: 'User research: office layout',     assignedTo: 'des-2', status: 'completed' as const },
-    { id: 'task-7', description: 'Implement task board UI',          assignedTo: 'eng-3', status: 'pending' as const },
-    { id: 'task-8', description: 'Add speech bubbles',               assignedTo: 'eng-1', status: 'completed' as const },
-    { id: 'task-9', description: 'Create pixel art assets',          assignedTo: 'des-1', status: 'pending' as const },
-    { id: 'task-10', description: 'Test agent movement',             assignedTo: 'qa-2',  status: 'pending' as const },
-    { id: 'task-11', description: 'Write API documentation',         assignedTo: 'eng-2', status: 'pending' as const },
-  ];
+  // Generate tasks from all agents' plan items
+  function generateTasksFromPlans() {
+    const tasks: any[] = [];
+    mockAgents.forEach(agent => {
+      if (agent.plan) {
+        agent.plan.forEach((planItem, index) => {
+          tasks.push({
+            id: `${agent.id}-plan-${index}`,
+            description: planItem.text,
+            assignedTo: agent.name,
+            status: planItem.status,
+            agentId: agent.id,
+            agentName: agent.name,
+            team: agent.team
+          });
+        });
+      }
+    });
+    return tasks;
+  }
+
+  const mockTasks = generateTasksFromPlans();
 
   setTimeout(() => {
     bridgeEvents.emitWSEvent({
@@ -166,31 +251,63 @@ function startMockMode() {
     }
   }, 2500);
 
-  // Task status updates — every 8-12 seconds, move a random task forward
+  // Task status updates — every 8-12 seconds, move a random plan item forward
   setInterval(() => {
-    const pendingTasks = mockTasks.filter(t => t.status === 'pending');
-    const inProgressTasks = mockTasks.filter(t => t.status === 'in_progress');
+    // Find an agent with plan items to update
+    const agentsWithPlans = mockAgents.filter(a => a.plan && a.plan.length > 0);
+    if (agentsWithPlans.length === 0) return;
+
+    const agent = pickRandom(agentsWithPlans);
+    const plan = agent.plan!;
 
     const roll = Math.random();
 
-    if (roll < 0.5 && pendingTasks.length > 0) {
-      // Move a pending task to in_progress
-      const task = pickRandom(pendingTasks);
-      (task as any).status = 'in_progress';
+    // Find pending or in_progress items
+    const pendingItems = plan.filter(p => p.status === 'pending');
+    const inProgressItems = plan.filter(p => p.status === 'in_progress');
+
+    if (roll < 0.5 && pendingItems.length > 0) {
+      // Move a pending item to in_progress
+      const planItem = pickRandom(pendingItems);
+      planItem.status = 'in_progress';
+      const planIndex = plan.indexOf(planItem);
+
+      const taskPayload = {
+        id: `${agent.id}-plan-${planIndex}`,
+        description: planItem.text,
+        assignedTo: agent.name,
+        status: planItem.status,
+        agentId: agent.id,
+        agentName: agent.name,
+        team: agent.team
+      };
+
       bridgeEvents.emitWSEvent({
         type: 'task_updated',
-        payload: task
+        payload: taskPayload
       });
-      console.log(`[Mock] Task "${task.description}" → in_progress`);
-    } else if (inProgressTasks.length > 0) {
-      // Move an in_progress task to completed
-      const task = pickRandom(inProgressTasks);
-      (task as any).status = 'completed';
+      console.log(`[Mock] ${agent.name}: "${planItem.text}" → in_progress`);
+    } else if (inProgressItems.length > 0) {
+      // Move an in_progress item to completed
+      const planItem = pickRandom(inProgressItems);
+      planItem.status = 'completed';
+      const planIndex = plan.indexOf(planItem);
+
+      const taskPayload = {
+        id: `${agent.id}-plan-${planIndex}`,
+        description: planItem.text,
+        assignedTo: agent.name,
+        status: planItem.status,
+        agentId: agent.id,
+        agentName: agent.name,
+        team: agent.team
+      };
+
       bridgeEvents.emitWSEvent({
         type: 'task_updated',
-        payload: task
+        payload: taskPayload
       });
-      console.log(`[Mock] Task "${task.description}" → completed ✓`);
+      console.log(`[Mock] ${agent.name}: "${planItem.text}" → completed ✓`);
     }
   }, 10000);
 

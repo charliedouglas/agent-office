@@ -345,6 +345,7 @@ export class TaskBoard {
     text.style.cssText = `
       word-wrap: break-word;
       margin-bottom: 4px;
+      padding-right: 16px;
     `;
 
     const meta = document.createElement('div');
@@ -352,28 +353,41 @@ export class TaskBoard {
       font-size: 9px;
       color: #666;
       margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     `;
-    meta.textContent = `Assigned: ${task.assignedTo}`;
+
+    // Get agent color (use agentId if available, fallback to assignedTo)
+    const agentIdentifier = task.agentId || task.assignedTo;
+    const color = getAgentColor(agentIdentifier);
+
+    // Agent dot (now visible for all statuses)
+    const dot = document.createElement('div');
+    dot.style.cssText = `
+      width: 6px;
+      height: 6px;
+      background: #${color.toString(16).padStart(6, '0')};
+      border: 1px solid white;
+      border-radius: 50%;
+      flex-shrink: 0;
+    `;
+
+    // Agent name
+    const agentName = document.createElement('span');
+    agentName.textContent = task.agentName || task.assignedTo;
+    agentName.style.cssText = `
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    `;
+
+    meta.appendChild(dot);
+    meta.appendChild(agentName);
 
     card.appendChild(text);
     card.appendChild(meta);
-
-    // Agent dot for in-progress tasks
-    if (task.status === 'in_progress') {
-      const color = getAgentColor(task.assignedTo);
-      const dot = document.createElement('div');
-      dot.style.cssText = `
-        position: absolute;
-        top: 6px;
-        right: 6px;
-        width: 8px;
-        height: 8px;
-        background: #${color.toString(16).padStart(6, '0')};
-        border: 1px solid white;
-        border-radius: 50%;
-      `;
-      card.appendChild(dot);
-    }
 
     container.appendChild(card);
   }
@@ -383,7 +397,8 @@ export class TaskBoard {
     const details = `
 Task: ${task.description}
 Status: ${task.status.replace('_', ' ').toUpperCase()}
-Assigned: ${task.assignedTo}
+Agent: ${task.agentName || task.assignedTo}
+Team: ${task.team || 'N/A'}
 ID: ${task.id}
     `.trim();
     alert(details);

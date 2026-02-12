@@ -2,6 +2,11 @@
 
 export type AgentState = 'idle' | 'typing' | 'walking' | 'talking';
 
+export interface PlanItem {
+  text: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -12,6 +17,7 @@ export interface Agent {
   y: number;
   deskPosition: { x: number; y: number };
   currentFile?: string; // File the agent is currently working on
+  plan?: PlanItem[];
 }
 
 export interface Task {
@@ -19,6 +25,9 @@ export interface Task {
   description: string;
   assignedTo: string;
   status: 'pending' | 'in_progress' | 'completed';
+  agentId?: string;
+  agentName?: string;
+  team?: string;
 }
 
 export interface Message {
