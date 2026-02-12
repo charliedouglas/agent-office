@@ -3,11 +3,13 @@ import os from 'os';
 import fs from 'fs';
 import { startWSServer } from './ws-server.js';
 import { startWatcher } from './watcher.js';
+import { startAPIServer } from './api.js';
 import { bridgeEvents } from './events.js';
 import { detectCollaborations } from './collaboration.js';
 import type { Agent, AgentState, Task } from '../../../shared/types.js';
 
 const WS_PORT = parseInt(process.env.WS_PORT || '3001');
+const API_PORT = parseInt(process.env.API_PORT || '3002');
 
 console.log(`
 ┌────────────────────────────────────────┐
@@ -16,6 +18,7 @@ console.log(`
 `);
 
 const wss = startWSServer(WS_PORT);
+const apiServer = startAPIServer(API_PORT);
 
 // Check if .agent/ directory exists in project root
 // When running from packages/bridge, we need to go up two levels to find project root
@@ -404,5 +407,6 @@ function startMockMode() {
 process.on('SIGINT', () => {
   console.log('\n[Bridge] Shutting down...');
   wss.close();
+  apiServer.close();
   process.exit(0);
 });
