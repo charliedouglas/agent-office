@@ -1,12 +1,12 @@
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import { startWSServer } from './ws-server.js';
 import { startWatcher } from './watcher.js';
 import { bridgeEvents } from './events.js';
 import { detectCollaborations } from './collaboration.js';
-import type { Agent, AgentState } from '../../../shared/types.js';
+import type { Agent, AgentState, Task } from '../../../shared/types.js';
 
-const MOCK_MODE = process.env.MOCK_MODE !== 'false';
 const WS_PORT = parseInt(process.env.WS_PORT || '3001');
 
 console.log(`
@@ -17,13 +17,62 @@ console.log(`
 
 const wss = startWSServer(WS_PORT);
 
-if (MOCK_MODE) {
+// Check if .agent/ directory exists in project root
+// When running from packages/bridge, we need to go up two levels to find project root
+function findProjectRoot(): string {
+  let current = process.cwd();
+
+  // Try current directory first
+  if (fs.existsSync(path.join(current, '.agent'))) {
+    return current;
+  }
+
+  // Try parent directory (for when running from packages/bridge)
+  const parent = path.dirname(current);
+  if (fs.existsSync(path.join(parent, '.agent'))) {
+    return parent;
+  }
+
+  // Try grandparent directory (for deeply nested structures)
+  const grandparent = path.dirname(parent);
+  if (fs.existsSync(path.join(grandparent, '.agent'))) {
+    return grandparent;
+  }
+
+  // Default to current directory
+  return current;
+}
+
+const projectRoot = findProjectRoot();
+const agentDir = path.join(projectRoot, '.agent');
+
+console.log(`[Init] Working directory: ${process.cwd()}`);
+console.log(`[Init] Project root: ${projectRoot}`);
+console.log(`[Init] Looking for: ${agentDir}`);
+
+let useRealMode = false;
+if (fs.existsSync(agentDir)) {
+  console.log(`[Init] Found .agent/ directory`);
+  // Check if there are any JSON files
+  const files = fs.readdirSync(agentDir).filter(f => f.endsWith('.json'));
+  console.log(`[Init] Found ${files.length} JSON files`);
+  if (files.length > 0) {
+    useRealMode = true;
+  }
+} else {
+  console.log(`[Init] .agent/ directory not found`);
+}
+
+// Allow environment variable to force mock mode
+const forceMockMode = process.env.MOCK_MODE === 'true';
+
+if (forceMockMode || !useRealMode) {
   console.log('[Mock Mode] Starting with fake data\n');
   startMockMode();
 } else {
-  const teamsDir = path.join(os.homedir(), '.claude', 'teams');
-  console.log('[Real Mode] Starting file watcher\n');
-  startWatcher(teamsDir);
+  console.log('[Real Mode] Starting file watcher for .agent/\n');
+  console.log(`[Real Mode] Watching directory: ${agentDir}`);
+  startWatcher(agentDir);
 }
 
 function startMockMode() {
