@@ -63,7 +63,7 @@ export class OfficeScene extends Phaser.Scene {
     this.setupSocketHandlers();
     this.socket.connect();
 
-    this.cameras.main.setBackgroundColor('#111118');
+    this.cameras.main.setBackgroundColor('#c8bfb0');
     this.cameras.main.centerOn((COLS * TILE) / 2, (ROWS * TILE) / 2);
   }
 
@@ -73,24 +73,54 @@ export class OfficeScene extends Phaser.Scene {
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
         const isLight = (x + y) % 2 === 0;
-        g.fillStyle(isLight ? 0x22222e : 0x1e1e28, 1);
+        g.fillStyle(isLight ? 0xc8bfb0 : 0xbdb4a5, 1);
         g.fillRect(x * TILE, y * TILE, TILE, TILE);
       }
     }
 
-    // Walls
-    g.lineStyle(3, 0x444466, 0.8);
+    // Walls — warm cream
+    g.fillStyle(0xe8e0d4, 1);
+    g.fillRect(0, 0, COLS * TILE, TILE);
+    g.fillRect(0, (ROWS - 1) * TILE, COLS * TILE, TILE);
+    g.fillRect(0, 0, TILE, ROWS * TILE);
+    g.fillRect((COLS - 1) * TILE, 0, TILE, ROWS * TILE);
+
+    // Baseboard — warm wood
+    g.lineStyle(3, 0x9a8870, 0.7);
     g.strokeRect(TILE, TILE, (COLS - 2) * TILE, (ROWS - 2) * TILE);
 
+    // Windows along top wall
+    for (let wx = 3; wx <= COLS - 5; wx += 3) {
+      g.fillStyle(0x87ceeb, 0.35);
+      g.fillRect(wx * TILE + 4, 4, TILE * 2 - 8, TILE - 8);
+      g.lineStyle(2, 0x8b7355, 0.7);
+      g.strokeRect(wx * TILE + 4, 4, TILE * 2 - 8, TILE - 8);
+      g.moveTo(wx * TILE + TILE, 4);
+      g.lineTo(wx * TILE + TILE, TILE - 4);
+      g.strokePath();
+    }
+
     // Door gap
-    g.fillStyle(0x1e1e28, 1);
+    g.fillStyle(0xbdb4a5, 1);
     g.fillRect(9 * TILE, (ROWS - 1) * TILE - 1, 2 * TILE, 4);
 
-    // Plants
-    const props = [[18, 1, '🌿'], [1, 13, '🌿'], [9, 6, '☕']];
+    // Decorative props
+    const props: [number, number, string][] = [
+      [18, 1, '🌿'], [1, 13, '🌿'], [1, 1, '🪴'], [18, 13, '🪴'],
+      [9, 7, '☕'], [5, 1, '🌱'], [14, 13, '🌱'],
+      [1, 7, '📚'], [18, 7, '🖨️'], [15, 1, '💧'],
+    ];
     for (const [x, y, emoji] of props) {
-      const t = this.add.text((x as number) * TILE + TILE / 2, (y as number) * TILE + TILE / 2, emoji as string, { fontSize: '14px' });
-      t.setOrigin(0.5, 0.5).setAlpha(0.4);
+      const t = this.add.text(x * TILE + TILE / 2, y * TILE + TILE / 2, emoji, { fontSize: '14px' });
+      t.setOrigin(0.5, 0.5).setAlpha(0.5);
+    }
+
+    // Subtle floor grout lines
+    g.lineStyle(0.5, 0xa8a095, 0.15);
+    for (let y = 1; y < ROWS - 1; y++) {
+      for (let x = 1; x < COLS - 1; x++) {
+        g.strokeRect(x * TILE, y * TILE, TILE, TILE);
+      }
     }
   }
 
