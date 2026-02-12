@@ -1,15 +1,19 @@
 import Phaser from 'phaser';
-import type { Agent as AgentData, AgentState, AgentTeam } from '../../../../shared/types';
+import type { Agent as AgentData, AgentState } from '../../../../shared/types';
 
 const TILE = 32;
 
-// Team-based body colours
-const TEAM_BODY_COLORS: Record<string, number> = {
-  engineering: 0x3b82f6,
-  design:      0xa855f7,
-  qa:          0x22c55e,
-  management:  0xf59e0b,
-};
+// Dynamic team colour assignment (same palette as OfficeScene)
+const PALETTE = [0x3b82f6, 0xa855f7, 0x22c55e, 0xf59e0b, 0xef4444, 0x06b6d4, 0xec4899, 0x84cc16];
+const teamColorMap = new Map<string, number>();
+let colorIdx = 0;
+function getTeamColor(team: string): number {
+  if (!teamColorMap.has(team)) {
+    teamColorMap.set(team, PALETTE[colorIdx % PALETTE.length]);
+    colorIdx++;
+  }
+  return teamColorMap.get(team)!;
+}
 
 // Unique skin/hair tones per agent index
 const SKIN_TONES = [0xf5d0a9, 0xd4a574, 0x8d5524, 0xffdbac, 0xc68642, 0xf1c27d, 0xe0ac69, 0xa0522d, 0xffd5b4];
@@ -49,7 +53,7 @@ export class Agent extends Phaser.GameObjects.Container {
     const g = scene.add.graphics();
     const skin = SKIN_TONES[this.agentIndex];
     const hair = HAIR_COLORS[this.agentIndex];
-    const shirt = TEAM_BODY_COLORS[this.agentData.team] ?? 0x666666;
+    const shirt = getTeamColor(this.agentData.team);
 
     // Shadow
     g.fillStyle(0x000000, 0.2);
@@ -91,8 +95,8 @@ export class Agent extends Phaser.GameObjects.Container {
     g.fillCircle(-2, -5, 1);
     g.fillCircle(2, -5, 1);
 
-    // Manager gets a tie
-    if (this.agentData.team === 'management') {
+    // Managers/leads get a tie
+    if (/manager|lead|director|head|chief|vp|cto|ceo/i.test(this.agentData.role)) {
       g.fillStyle(0xcc3333, 1);
       g.fillRect(-1, 2, 2, 8);
       g.fillStyle(0xaa2222, 1);
@@ -236,6 +240,9 @@ export class Agent extends Phaser.GameObjects.Container {
       },
     });
   }
+
+  getDeskX(): number { return this.agentData.deskPosition.x; }
+  getDeskY(): number { return this.agentData.deskPosition.y; }
 
   private hashCode(str: string): number {
     let hash = 0;

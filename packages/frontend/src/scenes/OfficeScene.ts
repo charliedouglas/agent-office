@@ -8,50 +8,44 @@ const TILE = 32;
 const COLS = 20;
 const ROWS = 15;
 
-// Team colors
-const TEAM_COLORS: Record<string, number> = {
-  engineering: 0x3b82f6,  // blue
-  design:      0xa855f7,  // purple
-  qa:          0x22c55e,  // green
-  management:  0xf59e0b,  // amber
-};
+// Auto-assign colours to teams as they appear
+const PALETTE = [0x3b82f6, 0xa855f7, 0x22c55e, 0xf59e0b, 0xef4444, 0x06b6d4, 0xec4899, 0x84cc16];
+const teamColorMap = new Map<string, number>();
+let colorIndex = 0;
 
-// Team zone rects (for floor tinting) — { x, y, w, h } in tiles
-const TEAM_ZONES: Record<string, { x: number; y: number; w: number; h: number; label: string }> = {
-  engineering: { x: 2, y: 2, w: 5, h: 5, label: 'ENGINEERING' },
-  design:      { x: 12, y: 2, w: 5, h: 3, label: 'DESIGN' },
-  qa:          { x: 12, y: 9, w: 5, h: 3, label: 'QA' },
-  management:  { x: 2, y: 10, w: 3, h: 3, label: 'MANAGEMENT' },
-};
+function getTeamColor(team: string): number {
+  if (!teamColorMap.has(team)) {
+    teamColorMap.set(team, PALETTE[colorIndex % PALETTE.length]);
+    colorIndex++;
+  }
+  return teamColorMap.get(team)!;
+}
 
 export class OfficeScene extends Phaser.Scene {
   private agents: Map<string, Agent> = new Map();
   private desks: Desk[] = [];
   private socket!: SocketClient;
+  private teamZoneGraphics!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super({ key: 'OfficeScene' });
   }
 
   create() {
-    this.drawOffice();
+    this.drawBaseFloor();
+    this.teamZoneGraphics = this.add.graphics();
+
     this.socket = new SocketClient();
     this.setupSocketHandlers();
     this.socket.connect();
 
-    // Camera
     this.cameras.main.setBackgroundColor('#111118');
     this.cameras.main.centerOn((COLS * TILE) / 2, (ROWS * TILE) / 2);
   }
 
-  private drawOffice() {
+  private drawBaseFloor() {
     const g = this.add.graphics();
 
-    // Base floor — dark
-    g.fillStyle(0x1a1a24, 1);
-    g.fillRect(0, 0, COLS * TILE, ROWS * TILE);
-
-    // Floor grid (subtle)
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
         const isLight = (x + y) % 2 === 0;
@@ -60,52 +54,69 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // Team zone highlights
-    for (const [team, zone] of Object.entries(TEAM_ZONES)) {
-      const color = TEAM_COLORS[team] ?? 0x444444;
-
-      // Tinted floor area
-      g.fillStyle(color, 0.08);
-      g.fillRect(zone.x * TILE, zone.y * TILE, zone.w * TILE, zone.h * TILE);
-
-      // Border
-      g.lineStyle(1, color, 0.3);
-      g.strokeRect(zone.x * TILE, zone.y * TILE, zone.w * TILE, zone.h * TILE);
-
-      // Label
-      const label = this.add.text(
-        (zone.x + zone.w / 2) * TILE,
-        zone.y * TILE - 8,
-        zone.label,
-        { fontSize: '9px', color: '#' + color.toString(16).padStart(6, '0'), fontFamily: 'monospace' }
-      );
-      label.setOrigin(0.5, 1);
-      label.setAlpha(0.6);
-    }
-
-    // Walls (top and left borders, thicker)
+    // Walls
     g.lineStyle(3, 0x444466, 0.8);
     g.strokeRect(TILE, TILE, (COLS - 2) * TILE, (ROWS - 2) * TILE);
 
-    // "Door" gap bottom-centre
-    g.fillStyle(0x1a1a24, 1);
+    // Door gap
+    g.fillStyle(0x1e1e28, 1);
     g.fillRect(9 * TILE, (ROWS - 1) * TILE - 1, 2 * TILE, 4);
 
-    // Water cooler / plant decorations
-    this.drawProp(g, 9, 6, 0x00aacc, '🚰');  // water cooler area
-    this.drawProp(g, 18, 1, 0x22aa44, '🌿');  // plant
-    this.drawProp(g, 1, 13, 0x22aa44, '🌿');  // plant
+    // Plants
+    const props = [[18, 1, '🌿'], [1, 13, '🌿'], [9, 6, '☕']];
+    for (const [x, y, emoji] of props) {
+      const t = this.add.text((x as number) * TILE + TILE / 2, (y as number) * TILE + TILE / 2, emoji as string, { fontSize: '14px' });
+      t.setOrigin(0.5, 0.5).setAlpha(0.4);
+    }
   }
 
-  private drawProp(g: Phaser.GameObjects.Graphics, tx: number, ty: number, color: number, emoji: string) {
-    const text = this.add.text(tx * TILE + TILE / 2, ty * TILE + TILE / 2, emoji, { fontSize: '16px' });
-    text.setOrigin(0.5, 0.5);
-    text.setAlpha(0.5);
+  /** Draw team zone highlights computed from actual agent positions */
+  private drawTeamZones(agents: AgentData[]) {
+    const g = this.teamZoneGraphics;
+    g.clear();
+
+    // Group agents by team
+    const teams = new Map<string, AgentData[]>();
+    for (const a of agents) {
+      if (!teams.has(a.team)) teams.set(a.team, []);
+      teams.get(a.team)!.push(a);
+    }
+
+    for (const [team, members] of teams) {
+      const color = getTeamColor(team);
+
+      // Compute bounding box of desk positions with 1-tile padding
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const m of members) {
+        minX = Math.min(minX, m.deskPosition.x);
+        minY = Math.min(minY, m.deskPosition.y);
+        maxX = Math.max(maxX, m.deskPosition.x);
+        maxY = Math.max(maxY, m.deskPosition.y);
+      }
+      const pad = 1;
+      const zx = (minX - pad) * TILE;
+      const zy = (minY - pad) * TILE;
+      const zw = (maxX - minX + 1 + pad * 2) * TILE;
+      const zh = (maxY - minY + 1 + pad * 2) * TILE;
+
+      g.fillStyle(color, 0.06);
+      g.fillRect(zx, zy, zw, zh);
+      g.lineStyle(1, color, 0.25);
+      g.strokeRect(zx, zy, zw, zh);
+
+      // Label
+      const label = this.add.text(zx + zw / 2, zy + 4, team.toUpperCase(), {
+        fontSize: '8px', fontFamily: 'monospace',
+        color: '#' + color.toString(16).padStart(6, '0'),
+      });
+      label.setOrigin(0.5, 0).setAlpha(0.5);
+    }
   }
 
   private setupSocketHandlers() {
     this.socket.on('init', (payload: { agents: AgentData[] }) => {
       console.log('[Office] Init:', payload.agents.length, 'agents');
+      this.drawTeamZones(payload.agents);
       payload.agents.forEach(a => this.spawnAgent(a));
     });
 
@@ -114,7 +125,29 @@ export class OfficeScene extends Phaser.Scene {
     });
 
     this.socket.on('agent_moving', (payload: { agentId: string; toX: number; toY: number }) => {
-      this.agents.get(payload.agentId)?.moveTo(payload.toX, payload.toY);
+      const agent = this.agents.get(payload.agentId);
+      if (!agent) return;
+
+      // Find if there's an agent already at the target position — if so, stand beside them
+      const targetAgent = this.findAgentAtDesk(payload.toX, payload.toY);
+      let destX = payload.toX;
+      let destY = payload.toY;
+
+      if (targetAgent) {
+        // Try positions around the target: right, left, below, above
+        const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1]];
+        for (const [ox, oy] of offsets) {
+          const nx = payload.toX + ox;
+          const ny = payload.toY + oy;
+          if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !this.isOccupied(nx, ny)) {
+            destX = nx;
+            destY = ny;
+            break;
+          }
+        }
+      }
+
+      agent.moveTo(destX, destY);
     });
 
     this.socket.on('agent_message', (payload: any) => {
@@ -127,14 +160,35 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
+  /** Check if any agent's desk is at this tile */
+  private findAgentAtDesk(tx: number, ty: number): Agent | undefined {
+    for (const [, agent] of this.agents) {
+      if (agent.getDeskX() === tx && agent.getDeskY() === ty) {
+        return agent;
+      }
+    }
+    return undefined;
+  }
+
+  /** Check if any agent is currently visually at this tile */
+  private isOccupied(tx: number, ty: number): boolean {
+    const px = tx * TILE;
+    const py = ty * TILE;
+    for (const [, agent] of this.agents) {
+      if (Math.abs(agent.x - px) < TILE / 2 && Math.abs(agent.y - py) < TILE / 2) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private spawnAgent(data: AgentData) {
     if (this.agents.has(data.id)) return;
 
-    // Create desk first
-    const desk = new Desk(this, data.deskPosition.x, data.deskPosition.y, TEAM_COLORS[data.team] ?? 0x666666);
+    const color = getTeamColor(data.team);
+    const desk = new Desk(this, data.deskPosition.x, data.deskPosition.y, color);
     this.desks.push(desk);
 
-    // Create agent
     const agent = new Agent(this, data);
     this.agents.set(data.id, agent);
   }
