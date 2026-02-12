@@ -4,6 +4,7 @@ import { Desk } from '../entities/Desk';
 import { TaskBoard } from '../entities/TaskBoard';
 import { SocketClient } from '../network/Socket';
 import { ChatInput } from '../ui/ChatInput';
+import { ActivityFeed } from '../ui/ActivityFeed';
 import { SoundManager } from '../audio/SoundManager';
 import type { Agent as AgentData, Task } from '../../../../shared/types';
 
@@ -34,6 +35,7 @@ export class OfficeScene extends Phaser.Scene {
   private taskBoard!: TaskBoard;
   private soundManager!: SoundManager;
   private muteButton!: Phaser.GameObjects.Container;
+  private activityFeed!: ActivityFeed;
 
   constructor() {
     super({ key: 'OfficeScene' });
@@ -49,6 +51,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // Initialize sound manager
     this.soundManager = new SoundManager();
+
+    // Create activity feed
+    this.activityFeed = new ActivityFeed(this);
 
     // Create mute/volume toggle button
     this.createMuteButton();
@@ -181,7 +186,14 @@ export class OfficeScene extends Phaser.Scene {
     });
 
     this.socket.on('agent_state_changed', (payload: { agentId: string; state: any }) => {
-      this.agents.get(payload.agentId)?.updateState(payload.state);
+      const agent = this.agents.get(payload.agentId);
+      agent?.updateState(payload.state);
+
+      // Log to activity feed
+      if (agent) {
+        const agentData = agent.getData();
+        this.activityFeed.addStateChange(agentData.name, payload.state, agentData.currentFile);
+      }
     });
 
     this.socket.on('agent_moving', (payload: { agentId: string; toX: number; toY: number }) => {
@@ -208,6 +220,11 @@ export class OfficeScene extends Phaser.Scene {
       }
 
       agent.moveToTile(destX, destY);
+
+      // Log to activity feed
+      const agentData = agent.getData();
+      const targetName = targetAgent?.getData().name;
+      this.activityFeed.addMovement(agentData.name, targetName);
     });
 
     this.socket.on('agent_message', (payload: any) => {
@@ -216,6 +233,12 @@ export class OfficeScene extends Phaser.Scene {
         fromAgent.updateState('talking');
         fromAgent.showMessage(payload.text);
         setTimeout(() => fromAgent.updateState('idle'), 3000);
+
+        // Log to activity feed
+        const toAgent = this.agents.get(payload.to);
+        const fromData = fromAgent.getData();
+        const toName = toAgent ? toAgent.getData().name : 'unknown';
+        this.activityFeed.addMessage(fromData.name, toName, payload.text);
       }
     });
 
@@ -226,6 +249,9 @@ export class OfficeScene extends Phaser.Scene {
       if (payload.status === 'completed') {
         this.soundManager.playTaskCompleteChime();
       }
+
+      // Log to activity feed
+      this.activityFeed.addTaskUpdate(payload.description, payload.status, payload.agentName);
     });
   }
 

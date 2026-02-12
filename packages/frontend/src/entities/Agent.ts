@@ -293,6 +293,7 @@ export class Agent extends Phaser.GameObjects.Container {
   getDeskY(): number { return this.agentData.deskPosition.y; }
   getId(): string { return this.agentData.id; }
   getName(): string { return this.agentData.name; }
+  getData(): AgentData { return this.agentData; }
 
   setClickCallback(callback: (agent: Agent) => void) {
     this.clickCallback = callback;
