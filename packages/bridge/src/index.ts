@@ -58,6 +58,11 @@ function startMockMode() {
     { id: 'task-4', description: 'Write integration tests',          assignedTo: 'qa-1',  status: 'pending' as const },
     { id: 'task-5', description: 'Design agent sprites',             assignedTo: 'des-1', status: 'in_progress' as const },
     { id: 'task-6', description: 'User research: office layout',     assignedTo: 'des-2', status: 'completed' as const },
+    { id: 'task-7', description: 'Implement task board UI',          assignedTo: 'eng-3', status: 'pending' as const },
+    { id: 'task-8', description: 'Add speech bubbles',               assignedTo: 'eng-1', status: 'completed' as const },
+    { id: 'task-9', description: 'Create pixel art assets',          assignedTo: 'des-1', status: 'pending' as const },
+    { id: 'task-10', description: 'Test agent movement',             assignedTo: 'qa-2',  status: 'pending' as const },
+    { id: 'task-11', description: 'Write API documentation',         assignedTo: 'eng-2', status: 'pending' as const },
   ];
 
   setTimeout(() => {
@@ -159,6 +164,34 @@ function startMockMode() {
       console.log(`[Mock] ${agent.name} → ${target.name}: "${msg}"`);
     }
   }, 2500);
+
+  // Task status updates — every 8-12 seconds, move a random task forward
+  setInterval(() => {
+    const pendingTasks = mockTasks.filter(t => t.status === 'pending');
+    const inProgressTasks = mockTasks.filter(t => t.status === 'in_progress');
+
+    const roll = Math.random();
+
+    if (roll < 0.5 && pendingTasks.length > 0) {
+      // Move a pending task to in_progress
+      const task = pickRandom(pendingTasks);
+      task.status = 'in_progress';
+      bridgeEvents.emitWSEvent({
+        type: 'task_updated',
+        payload: task
+      });
+      console.log(`[Mock] Task "${task.description}" → in_progress`);
+    } else if (inProgressTasks.length > 0) {
+      // Move an in_progress task to completed
+      const task = pickRandom(inProgressTasks);
+      task.status = 'completed';
+      bridgeEvents.emitWSEvent({
+        type: 'task_updated',
+        payload: task
+      });
+      console.log(`[Mock] Task "${task.description}" → completed ✓`);
+    }
+  }, 10000);
 }
 
 process.on('SIGINT', () => {
