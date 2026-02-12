@@ -1,0 +1,17 @@
+{
+  "name": "agent-office",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/bridge & npm run dev --workspace=packages/frontend",
+    "build": "npm run build --workspace=packages/bridge && npm run build --workspace=packages/frontend",
+    "bridge": "npm run dev --workspace=packages/bridge",
+    "frontend": "npm run dev --workspace=packages/frontend"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
