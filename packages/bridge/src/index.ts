@@ -3,6 +3,7 @@ import os from 'os';
 import { startWSServer } from './ws-server.js';
 import { startWatcher } from './watcher.js';
 import { bridgeEvents } from './events.js';
+import { detectCollaborations } from './collaboration.js';
 import type { Agent, AgentState } from '../../../shared/types.js';
 
 const MOCK_MODE = process.env.MOCK_MODE !== 'false';
@@ -34,18 +35,18 @@ function startMockMode() {
 
   const mockAgents: Agent[] = [
     // Engineering (4 devs, clustered top-left)
-    { id: 'eng-1', name: 'Alice',   role: 'Senior Engineer',  team: 'engineering', state: 'typing', x: 3, y: 3, deskPosition: { x: 3, y: 3 } },
-    { id: 'eng-2', name: 'Bob',     role: 'Backend Engineer',  team: 'engineering', state: 'typing', x: 5, y: 3, deskPosition: { x: 5, y: 3 } },
-    { id: 'eng-3', name: 'Charlie', role: 'Frontend Engineer', team: 'engineering', state: 'idle',   x: 3, y: 5, deskPosition: { x: 3, y: 5 } },
-    { id: 'eng-4', name: 'Dave',    role: 'DevOps Engineer',   team: 'engineering', state: 'typing', x: 5, y: 5, deskPosition: { x: 5, y: 5 } },
+    { id: 'eng-1', name: 'Alice',   role: 'Senior Engineer',  team: 'engineering', state: 'typing', x: 3, y: 3, deskPosition: { x: 3, y: 3 }, currentFile: 'src/OfficeScene.ts' },
+    { id: 'eng-2', name: 'Bob',     role: 'Backend Engineer',  team: 'engineering', state: 'typing', x: 5, y: 3, deskPosition: { x: 5, y: 3 }, currentFile: 'src/ws-server.ts' },
+    { id: 'eng-3', name: 'Charlie', role: 'Frontend Engineer', team: 'engineering', state: 'idle',   x: 3, y: 5, deskPosition: { x: 3, y: 5 }, currentFile: 'src/TaskBoard.ts' },
+    { id: 'eng-4', name: 'Dave',    role: 'DevOps Engineer',   team: 'engineering', state: 'typing', x: 5, y: 5, deskPosition: { x: 5, y: 5 }, currentFile: 'deploy/config.yml' },
 
     // Design (2 designers, top-right)
-    { id: 'des-1', name: 'Eve',     role: 'UI Designer',       team: 'design', state: 'idle',   x: 13, y: 3, deskPosition: { x: 13, y: 3 } },
-    { id: 'des-2', name: 'Fiona',   role: 'UX Researcher',     team: 'design', state: 'typing', x: 15, y: 3, deskPosition: { x: 15, y: 3 } },
+    { id: 'des-1', name: 'Eve',     role: 'UI Designer',       team: 'design', state: 'idle',   x: 13, y: 3, deskPosition: { x: 13, y: 3 }, currentFile: 'assets/sprites.png' },
+    { id: 'des-2', name: 'Fiona',   role: 'UX Researcher',     team: 'design', state: 'typing', x: 15, y: 3, deskPosition: { x: 15, y: 3 }, currentFile: 'docs/research.md' },
 
     // QA (2 testers, bottom-right)
-    { id: 'qa-1',  name: 'George',  role: 'QA Lead',           team: 'qa', state: 'typing', x: 13, y: 10, deskPosition: { x: 13, y: 10 } },
-    { id: 'qa-2',  name: 'Hannah',  role: 'Test Engineer',     team: 'qa', state: 'idle',   x: 15, y: 10, deskPosition: { x: 15, y: 10 } },
+    { id: 'qa-1',  name: 'George',  role: 'QA Lead',           team: 'qa', state: 'typing', x: 13, y: 10, deskPosition: { x: 13, y: 10 }, currentFile: 'tests/integration.spec.ts' },
+    { id: 'qa-2',  name: 'Hannah',  role: 'Test Engineer',     team: 'qa', state: 'idle',   x: 15, y: 10, deskPosition: { x: 15, y: 10 }, currentFile: 'tests/unit.spec.ts' },
 
     // Management (solo, bottom-left, slightly separated)
     { id: 'mgr-1', name: 'Marcus',  role: 'Engineering Manager', team: 'management', state: 'idle', x: 3, y: 11, deskPosition: { x: 3, y: 11 } },
@@ -175,7 +176,7 @@ function startMockMode() {
     if (roll < 0.5 && pendingTasks.length > 0) {
       // Move a pending task to in_progress
       const task = pickRandom(pendingTasks);
-      task.status = 'in_progress';
+      (task as any).status = 'in_progress';
       bridgeEvents.emitWSEvent({
         type: 'task_updated',
         payload: task
@@ -184,7 +185,7 @@ function startMockMode() {
     } else if (inProgressTasks.length > 0) {
       // Move an in_progress task to completed
       const task = pickRandom(inProgressTasks);
-      task.status = 'completed';
+      (task as any).status = 'completed';
       bridgeEvents.emitWSEvent({
         type: 'task_updated',
         payload: task
@@ -192,6 +193,46 @@ function startMockMode() {
       console.log(`[Mock] Task "${task.description}" → completed ✓`);
     }
   }, 10000);
+
+  // Collaboration simulation — every 15 seconds, randomly assign files to trigger collaborations
+  const mockFiles = [
+    'src/OfficeScene.ts',
+    'src/TaskBoard.ts',
+    'src/ws-server.ts',
+    'src/Agent.ts',
+    'tests/integration.spec.ts',
+    'deploy/config.yml',
+    'assets/sprites.png',
+    'docs/research.md'
+  ];
+
+  setInterval(() => {
+    const engineeringAgents = mockAgents.filter(a => a.team === 'engineering');
+    const roll = Math.random();
+
+    if (roll < 0.4 && engineeringAgents.length >= 2) {
+      // Make two engineers work on the same file
+      const agent1 = pickRandom(engineeringAgents);
+      const others = engineeringAgents.filter(a => a.id !== agent1.id);
+      const agent2 = pickRandom(others);
+      const file = pickRandom(mockFiles);
+
+      agent1.currentFile = file;
+      agent2.currentFile = file;
+
+      console.log(`[Mock] ${agent1.name} & ${agent2.name} now working on ${file}`);
+      detectCollaborations(mockAgents);
+
+    } else {
+      // Agents work on different files (end collaboration)
+      const agent = pickRandom(engineeringAgents);
+      const newFile = pickRandom(mockFiles);
+      agent.currentFile = newFile;
+
+      console.log(`[Mock] ${agent.name} switched to ${newFile}`);
+      detectCollaborations(mockAgents);
+    }
+  }, 15000);
 }
 
 process.on('SIGINT', () => {

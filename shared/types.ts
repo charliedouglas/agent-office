@@ -11,6 +11,7 @@ export interface Agent {
   x: number;
   y: number;
   deskPosition: { x: number; y: number };
+  currentFile?: string; // File the agent is currently working on
 }
 
 export interface Task {
