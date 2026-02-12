@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Agent as AgentData, AgentState } from '../../../../shared/types';
+import type { SoundManager } from '../audio/SoundManager';
 
 const TILE = 32;
 
@@ -29,11 +30,14 @@ export class Agent extends Phaser.GameObjects.Container {
   private typingTween: Phaser.Tweens.Tween | null = null;
   private speechBubble: Phaser.GameObjects.Container | null = null;
   private agentIndex: number;
+  private soundManager: SoundManager | null = null;
+  private typingSoundTimer: Phaser.Time.TimerEvent | null = null;
 
-  constructor(scene: Phaser.Scene, data: AgentData) {
+  constructor(scene: Phaser.Scene, data: AgentData, soundManager?: SoundManager) {
     super(scene, data.x * TILE, data.y * TILE);
     this.agentData = data;
     this.currentState = data.state;
+    this.soundManager = soundManager || null;
 
     // Derive a stable index from agent id for colour variation
     this.agentIndex = Math.abs(this.hashCode(data.id)) % SKIN_TONES.length;
@@ -144,6 +148,12 @@ export class Agent extends Phaser.GameObjects.Container {
       this.body.setY(0);
     }
 
+    // Clean up old typing sound timer
+    if (this.typingSoundTimer) {
+      this.typingSoundTimer.remove();
+      this.typingSoundTimer = null;
+    }
+
     switch (newState) {
       case 'idle':
         this.stateIcon.setText('');
@@ -159,6 +169,16 @@ export class Agent extends Phaser.GameObjects.Container {
           repeat: -1,
           ease: 'Sine.easeInOut',
         });
+        // Keyboard clacking sounds at irregular intervals (typing rhythm)
+        if (this.soundManager) {
+          this.typingSoundTimer = this.scene.time.addEvent({
+            delay: 120 + Math.random() * 80, // 120-200ms between keystrokes
+            callback: () => {
+              this.soundManager?.playTypingSound();
+            },
+            loop: true,
+          });
+        }
         break;
       case 'walking':
         this.stateIcon.setText('🚶');
@@ -172,6 +192,18 @@ export class Agent extends Phaser.GameObjects.Container {
   moveTo(tileX: number, tileY: number, onComplete?: () => void) {
     this.updateState('walking');
 
+    // Play footsteps at regular intervals during walking
+    let footstepTimer: Phaser.Time.TimerEvent | null = null;
+    if (this.soundManager) {
+      footstepTimer = this.scene.time.addEvent({
+        delay: 300, // Footstep every 300ms
+        callback: () => {
+          this.soundManager?.playFootstep();
+        },
+        loop: true,
+      });
+    }
+
     this.scene.tweens.add({
       targets: this,
       x: tileX * TILE,
@@ -179,6 +211,9 @@ export class Agent extends Phaser.GameObjects.Container {
       duration: 1200,
       ease: 'Quad.easeInOut',
       onComplete: () => {
+        if (footstepTimer) {
+          footstepTimer.remove();
+        }
         this.updateState('idle');
         onComplete?.();
       },
@@ -191,6 +226,9 @@ export class Agent extends Phaser.GameObjects.Container {
       this.speechBubble.destroy();
       this.speechBubble = null;
     }
+
+    // Play notification chime when message appears
+    this.soundManager?.playNotificationChime();
 
     const bubble = this.scene.add.container(this.x, this.y - 30);
     bubble.setDepth(100);

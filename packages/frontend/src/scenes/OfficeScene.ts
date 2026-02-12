@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Agent } from '../entities/Agent';
 import { Desk } from '../entities/Desk';
 import { SocketClient } from '../network/Socket';
+import { SoundManager } from '../audio/SoundManager';
 import type { Agent as AgentData } from '../../../../shared/types';
 
 const TILE = 32;
@@ -26,6 +27,8 @@ export class OfficeScene extends Phaser.Scene {
   private desks: Desk[] = [];
   private socket!: SocketClient;
   private teamZoneGraphics!: Phaser.GameObjects.Graphics;
+  private soundManager!: SoundManager;
+  private muteButton!: Phaser.GameObjects.Container;
 
   constructor() {
     super({ key: 'OfficeScene' });
@@ -34,6 +37,18 @@ export class OfficeScene extends Phaser.Scene {
   create() {
     this.drawBaseFloor();
     this.teamZoneGraphics = this.add.graphics();
+
+    // Initialize sound manager
+    this.soundManager = new SoundManager();
+
+    // Create mute/volume toggle button
+    this.createMuteButton();
+
+    // Resume audio context on first user interaction
+    this.input.once('pointerdown', () => {
+      this.soundManager.resume();
+      this.soundManager.startAmbientHum();
+    });
 
     this.socket = new SocketClient();
     this.setupSocketHandlers();
@@ -158,6 +173,13 @@ export class OfficeScene extends Phaser.Scene {
         setTimeout(() => fromAgent.updateState('idle'), 3000);
       }
     });
+
+    this.socket.on('task_updated', (payload: any) => {
+      // Play completion chime when a task is marked as completed
+      if (payload.status === 'completed') {
+        this.soundManager.playTaskCompleteChime();
+      }
+    });
   }
 
   /** Check if any agent's desk is at this tile */
@@ -189,8 +211,63 @@ export class OfficeScene extends Phaser.Scene {
     const desk = new Desk(this, data.deskPosition.x, data.deskPosition.y, color);
     this.desks.push(desk);
 
-    const agent = new Agent(this, data);
+    const agent = new Agent(this, data, this.soundManager);
     this.agents.set(data.id, agent);
+  }
+
+  private createMuteButton() {
+    const x = COLS * TILE - 40;
+    const y = 20;
+
+    const container = this.add.container(x, y);
+    container.setDepth(1000);
+    container.setScrollFactor(0); // Fixed to camera
+
+    // Background
+    const bg = this.add.graphics();
+    bg.fillStyle(0x222233, 0.9);
+    bg.fillRoundedRect(-16, -16, 32, 32, 4);
+    bg.lineStyle(2, 0x444466, 0.8);
+    bg.strokeRoundedRect(-16, -16, 32, 32, 4);
+
+    // Icon
+    const icon = this.add.text(0, 0, '🔊', {
+      fontSize: '18px',
+    });
+    icon.setOrigin(0.5, 0.5);
+
+    container.add([bg, icon]);
+
+    // Make interactive
+    const hitArea = new Phaser.Geom.Rectangle(-16, -16, 32, 32);
+    container.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
+    container.on('pointerover', () => {
+      bg.clear();
+      bg.fillStyle(0x333344, 0.95);
+      bg.fillRoundedRect(-16, -16, 32, 32, 4);
+      bg.lineStyle(2, 0x5555ff, 1);
+      bg.strokeRoundedRect(-16, -16, 32, 32, 4);
+    });
+
+    container.on('pointerout', () => {
+      bg.clear();
+      bg.fillStyle(0x222233, 0.9);
+      bg.fillRoundedRect(-16, -16, 32, 32, 4);
+      bg.lineStyle(2, 0x444466, 0.8);
+      bg.strokeRoundedRect(-16, -16, 32, 32, 4);
+    });
+
+    container.on('pointerdown', () => {
+      const enabled = this.soundManager.toggleMute();
+      icon.setText(enabled ? '🔊' : '🔇');
+      // Play a confirmation sound if re-enabling
+      if (enabled) {
+        this.soundManager.playNotificationChime();
+        this.soundManager.startAmbientHum();
+      }
+    });
+
+    this.muteButton = container;
   }
 
   update() {}
