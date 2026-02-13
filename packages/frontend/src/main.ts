@@ -14,6 +14,9 @@ function startGame() {
     backgroundColor: '#1a1a1a',
     pixelArt: true,
     scene: [OfficeScene, UIScene],
+    dom: {
+      createContainer: true
+    },
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
