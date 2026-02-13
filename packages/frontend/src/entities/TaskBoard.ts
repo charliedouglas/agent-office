@@ -186,6 +186,7 @@ export class TaskBoard {
       display: flex;
       gap: 10px;
       justify-content: space-around;
+      min-height: 200px;
     `;
 
     // Create three columns

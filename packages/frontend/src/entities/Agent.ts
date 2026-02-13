@@ -24,6 +24,7 @@ export class Agent extends Phaser.GameObjects.Container {
   private agentData: AgentData;
   private agentBody!: Phaser.GameObjects.Graphics;
   private nameLabel!: Phaser.GameObjects.Text;
+  private nameLabelBg!: Phaser.GameObjects.Graphics;
   private roleLabel!: Phaser.GameObjects.Text;
   private stateIcon!: Phaser.GameObjects.Text;
   private currentState: AgentState;
@@ -53,6 +54,16 @@ export class Agent extends Phaser.GameObjects.Container {
     // Enable click interaction
     this.setSize(32, 32);
     this.setInteractive({ useHandCursor: true });
+
+    // Show role on hover
+    this.on('pointerover', () => {
+      this.roleLabel.setVisible(true);
+    });
+
+    this.on('pointerout', () => {
+      this.roleLabel.setVisible(false);
+    });
+
     this.on('pointerdown', () => {
       if (this.clickCallback) {
         this.clickCallback(this);
@@ -122,22 +133,44 @@ export class Agent extends Phaser.GameObjects.Container {
   }
 
   private drawLabels(scene: Phaser.Scene) {
+    // Name label - bigger and bolder
     this.nameLabel = scene.add.text(0, -18, this.agentData.name, {
-      fontSize: '8px',
+      fontSize: '10px',
       fontFamily: 'monospace',
       color: '#ffffff',
+      fontStyle: 'bold',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 3,
     });
     this.nameLabel.setOrigin(0.5, 1);
+
+    // Background for name label - dark semi-transparent
+    this.nameLabelBg = scene.add.graphics();
+    const padding = 2;
+    const bgWidth = this.nameLabel.width + padding * 2;
+    const bgHeight = this.nameLabel.height + padding;
+    this.nameLabelBg.fillStyle(0x000000, 0.6);
+    this.nameLabelBg.fillRoundedRect(
+      -bgWidth / 2,
+      -18 - bgHeight + padding,
+      bgWidth,
+      bgHeight,
+      2
+    );
+
+    this.add(this.nameLabelBg);
     this.add(this.nameLabel);
 
+    // Role label - hidden by default, smaller
     this.roleLabel = scene.add.text(0, 20, this.agentData.role, {
-      fontSize: '6px',
+      fontSize: '7px',
       fontFamily: 'monospace',
-      color: '#888888',
+      color: '#ffffff',
+      backgroundColor: '#000000',
+      padding: { x: 3, y: 1 },
     });
     this.roleLabel.setOrigin(0.5, 0);
+    this.roleLabel.setVisible(false); // Hidden by default
     this.add(this.roleLabel);
   }
 
