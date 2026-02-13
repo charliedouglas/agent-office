@@ -5,6 +5,7 @@ import { TaskBoard } from '../entities/TaskBoard';
 import { SocketClient } from '../network/Socket';
 import { ChatInput } from '../ui/ChatInput';
 import { ActivityFeed } from '../ui/ActivityFeed';
+import { AgentDetailPanel } from '../ui/AgentDetailPanel';
 import { SoundManager } from '../audio/SoundManager';
 import type { Agent as AgentData, Task } from '../../../../shared/types';
 
@@ -36,6 +37,7 @@ export class OfficeScene extends Phaser.Scene {
   private soundManager!: SoundManager;
   private muteButton!: Phaser.GameObjects.Container;
   private activityFeed!: ActivityFeed;
+  private agentDetailPanel!: AgentDetailPanel;
 
   constructor() {
     super({ key: 'OfficeScene' });
@@ -45,6 +47,7 @@ export class OfficeScene extends Phaser.Scene {
     this.drawBaseFloor();
     this.teamZoneGraphics = this.add.graphics();
     this.chatInput = new ChatInput(this);
+    this.agentDetailPanel = new AgentDetailPanel(this);
 
     // Create task board on the top wall
     this.taskBoard = new TaskBoard(this, (COLS * TILE) / 2, TILE * 1.5);
@@ -57,6 +60,13 @@ export class OfficeScene extends Phaser.Scene {
 
     // Create mute/volume toggle button
     this.createMuteButton();
+
+    // ESC key handler for closing detail panel
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.agentDetailPanel.isVisible()) {
+        this.agentDetailPanel.handleEscKey();
+      }
+    });
 
     // Resume audio context on first user interaction
     this.input.once('pointerdown', () => {
@@ -185,12 +195,25 @@ export class OfficeScene extends Phaser.Scene {
       }
     });
 
-    this.socket.on('agent_state_changed', (payload: { agentId: string; state: any }) => {
+    this.socket.on('agent_state_changed', (payload: { agentId: string; state: any; currentFile?: string; plan?: any; currentTask?: string }) => {
       const agent = this.agents.get(payload.agentId);
-      agent?.updateState(payload.state);
-
-      // Log to activity feed
       if (agent) {
+        agent.updateState(payload.state);
+
+        // Update agent data with any additional fields
+        agent.updateData({
+          state: payload.state,
+          currentFile: payload.currentFile,
+          plan: payload.plan,
+          currentTask: payload.currentTask,
+        });
+
+        // Update detail panel if it's showing this agent
+        if (this.agentDetailPanel.isVisible() && this.currentChatAgent === agent) {
+          this.agentDetailPanel.updateAgentData(agent.getData());
+        }
+
+        // Log to activity feed
         const agentData = agent.getData();
         this.activityFeed.addStateChange(agentData.name, payload.state, agentData.currentFile);
       }
@@ -280,6 +303,11 @@ export class OfficeScene extends Phaser.Scene {
   private spawnAgent(data: AgentData) {
     if (this.agents.has(data.id)) return;
 
+    // Set spawn time if not already set
+    if (!data.spawnTime) {
+      data.spawnTime = Date.now();
+    }
+
     const color = getTeamColor(data.team);
     const desk = new Desk(this, data.deskPosition.x, data.deskPosition.y, color);
     this.desks.push(desk);
@@ -290,35 +318,19 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private handleAgentClick(agent: Agent) {
-    // Don't open if already chatting with this agent
-    if (this.chatInput.isVisible() && this.currentChatAgent === agent) {
-      return;
+    // Close existing panel/chat if open
+    if (this.agentDetailPanel.isVisible()) {
+      this.agentDetailPanel.hide();
     }
-
-    // Close existing chat if open
     if (this.chatInput.isVisible()) {
       this.chatInput.hide();
     }
 
     this.currentChatAgent = agent;
 
-    // Calculate screen position for chat input
-    const worldX = agent.x;
-    const worldY = agent.y;
-
-    // Convert world coordinates to screen coordinates
-    const camera = this.cameras.main;
-    const screenX = (worldX - camera.scrollX) * camera.zoom + camera.x;
-    const screenY = (worldY - camera.scrollY) * camera.zoom + camera.y;
-
-    // Position chat input near the agent
-    const chatX = screenX + 20;
-    const chatY = screenY - 60;
-
-    this.chatInput.show(
-      chatX,
-      chatY,
-      agent.getName(),
+    // Show detail panel with agent data
+    this.agentDetailPanel.show(
+      agent.getData(),
       (message) => this.handleSendMessage(agent, message),
       () => { this.currentChatAgent = null; }
     );

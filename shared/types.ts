@@ -18,6 +18,8 @@ export interface Agent {
   deskPosition: { x: number; y: number };
   currentFile?: string; // File the agent is currently working on
   plan?: PlanItem[];
+  currentTask?: string; // Current task description
+  spawnTime?: number; // Timestamp when agent was created
 }
 
 export interface Task {

@@ -295,6 +295,10 @@ export class Agent extends Phaser.GameObjects.Container {
   getName(): string { return this.agentData.name; }
   getData(): AgentData { return this.agentData; }
 
+  updateData(newData: Partial<AgentData>) {
+    this.agentData = { ...this.agentData, ...newData };
+  }
+
   setClickCallback(callback: (agent: Agent) => void) {
     this.clickCallback = callback;
   }
