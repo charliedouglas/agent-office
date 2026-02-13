@@ -18,7 +18,7 @@ export function parseAgentFile(filePath: string): AgentFileData | null {
     const data = JSON.parse(content);
 
     // Validate required fields
-    if (!data.id || !data.name || !data.team) {
+    if (!data.name || !data.team) {
       console.error(`[Parser] Invalid agent file: missing required fields in ${filePath}`);
       return null;
     }
@@ -30,12 +30,12 @@ export function parseAgentFile(filePath: string): AgentFileData | null {
     }
 
     return {
-      id: data.id,
+      id: data.id || data.name.toLowerCase().replace(/\s+/g, '-'),
       name: data.name,
       team: data.team,
       task: data.task || '',
       state,
-      plan: data.plan || [],
+      plan: (data.plan || []).map((p: any) => ({ text: p.text || p.task || '', status: p.status || 'pending' })),
       currentFile: data.currentFile,
       updatedAt: data.updatedAt
     };

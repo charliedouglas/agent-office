@@ -40,6 +40,7 @@ export class OfficeScene extends Phaser.Scene {
   private activityFeed!: ActivityFeed;
   private agentDetailPanel!: AgentDetailPanel;
   private toastManager!: ToastManager;
+  private clockText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'OfficeScene' });
@@ -65,6 +66,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // Create mute/volume toggle button
     this.createMuteButton();
+
+    // Create wall clock
+    this.createWallClock();
 
     // ESC key handler for closing detail panel
     this.input.keyboard?.on('keydown-ESC', () => {
@@ -109,12 +113,25 @@ export class OfficeScene extends Phaser.Scene {
     g.lineStyle(3, 0x9a8870, 0.7);
     g.strokeRect(TILE, TILE, (COLS - 2) * TILE, (ROWS - 2) * TILE);
 
-    // Windows along top wall
+    // Windows along top wall with light effects
     for (let wx = 3; wx <= COLS - 5; wx += 3) {
+      // Light glow effect from window
+      g.fillStyle(0xfffacd, 0.08);
+      g.fillRect(wx * TILE + 4, TILE + 4, TILE * 2 - 8, TILE * 2);
+
+      // Window glass (sky blue)
       g.fillStyle(0x87ceeb, 0.35);
       g.fillRect(wx * TILE + 4, 4, TILE * 2 - 8, TILE - 8);
+
+      // Brighter center (sun reflection)
+      g.fillStyle(0xfffacd, 0.15);
+      g.fillRect(wx * TILE + TILE / 2, 6, TILE, TILE - 12);
+
+      // Window frame
       g.lineStyle(2, 0x8b7355, 0.7);
       g.strokeRect(wx * TILE + 4, 4, TILE * 2 - 8, TILE - 8);
+
+      // Window divider
       g.moveTo(wx * TILE + TILE, 4);
       g.lineTo(wx * TILE + TILE, TILE - 4);
       g.strokePath();
@@ -123,6 +140,69 @@ export class OfficeScene extends Phaser.Scene {
     // Door gap
     g.fillStyle(0xbdb4a5, 1);
     g.fillRect(9 * TILE, (ROWS - 1) * TILE - 1, 2 * TILE, 4);
+
+    // Welcome mat near door
+    const matX = 10 * TILE - 8;
+    const matY = (ROWS - 2) * TILE + 8;
+    g.fillStyle(0x8b4513, 0.8); // Brown mat
+    g.fillRect(matX, matY, TILE + 16, 12);
+    g.lineStyle(1, 0x654321, 0.9);
+    g.strokeRect(matX, matY, TILE + 16, 12);
+
+    // Mat texture (horizontal lines)
+    g.lineStyle(0.5, 0x654321, 0.4);
+    for (let i = 0; i < 3; i++) {
+      g.moveTo(matX + 2, matY + 3 + i * 3);
+      g.lineTo(matX + TILE + 14, matY + 3 + i * 3);
+      g.strokePath();
+    }
+
+    // Water cooler (center-ish area)
+    const coolerX = 10 * TILE;
+    const coolerY = 7 * TILE;
+
+    // Cooler body (blue cylinder)
+    g.fillStyle(0x4a90e2, 1);
+    g.fillRect(coolerX - 6, coolerY - 8, 12, 16);
+    g.lineStyle(1, 0x2b5a8f, 1);
+    g.strokeRect(coolerX - 6, coolerY - 8, 12, 16);
+
+    // Cooler top (lighter blue)
+    g.fillStyle(0x87ceeb, 1);
+    g.fillEllipse(coolerX, coolerY - 8, 12, 6);
+    g.lineStyle(1, 0x2b5a8f, 1);
+    g.strokeEllipse(coolerX, coolerY - 8, 12, 6);
+
+    // Cooler base (darker)
+    g.fillStyle(0x2b5a8f, 1);
+    g.fillRect(coolerX - 8, coolerY + 8, 16, 4);
+
+    // Potted plants in corners
+    const plantCorners = [
+      { x: 1.5 * TILE, y: 1.5 * TILE },     // Top-left
+      { x: (COLS - 1.5) * TILE, y: 1.5 * TILE }, // Top-right
+      { x: 1.5 * TILE, y: (ROWS - 1.5) * TILE }, // Bottom-left
+      { x: (COLS - 1.5) * TILE, y: (ROWS - 1.5) * TILE }, // Bottom-right
+    ];
+
+    for (const corner of plantCorners) {
+      // Pot (brown rectangle)
+      g.fillStyle(0x8b4513, 1);
+      g.fillRect(corner.x - 6, corner.y + 4, 12, 8);
+      g.lineStyle(1, 0x654321, 1);
+      g.strokeRect(corner.x - 6, corner.y + 4, 12, 8);
+
+      // Plant (green circles for foliage)
+      g.fillStyle(0x228b22, 0.8);
+      g.fillCircle(corner.x - 3, corner.y - 2, 5);
+      g.fillCircle(corner.x + 3, corner.y - 2, 5);
+      g.fillCircle(corner.x, corner.y - 5, 5);
+
+      // Highlight on leaves
+      g.fillStyle(0x32cd32, 0.4);
+      g.fillCircle(corner.x - 2, corner.y - 6, 2);
+      g.fillCircle(corner.x + 2, corner.y - 3, 2);
+    }
 
     // Decorative props
     const props: [number, number, string][] = [
@@ -396,6 +476,35 @@ export class OfficeScene extends Phaser.Scene {
     }, 1500);
   }
 
+  private createWallClock() {
+    const x = (COLS - 2) * TILE;
+    const y = TILE / 2;
+
+    // Clock background (circular)
+    const bg = this.add.graphics();
+    bg.fillStyle(0xf5f5dc, 1); // Beige
+    bg.fillCircle(x, y, 12);
+    bg.lineStyle(2, 0x8b7355, 1); // Brown border
+    bg.strokeCircle(x, y, 12);
+
+    // Clock face with hour markers
+    for (let i = 0; i < 12; i++) {
+      const angle = (i * 30 - 90) * Math.PI / 180;
+      const markerX = x + Math.cos(angle) * 9;
+      const markerY = y + Math.sin(angle) * 9;
+      bg.fillStyle(0x333333, 1);
+      bg.fillCircle(markerX, markerY, 1);
+    }
+
+    // Time text below clock
+    this.clockText = this.add.text(x, y + 18, '', {
+      fontSize: '7px',
+      fontFamily: 'monospace',
+      color: '#333333',
+    });
+    this.clockText.setOrigin(0.5, 0);
+  }
+
   private createMuteButton() {
     const x = COLS * TILE - 40;
     const y = 20;
@@ -451,5 +560,13 @@ export class OfficeScene extends Phaser.Scene {
     this.muteButton = container;
   }
 
-  update() {}
+  update() {
+    // Update clock time
+    if (this.clockText) {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      this.clockText.setText(`${hours}:${minutes}`);
+    }
+  }
 }

@@ -19,6 +19,7 @@ export class SoundManager {
 
   /**
    * Play a keyboard clacking sound (short click with slight pitch variation)
+   * Enhanced with more realistic pitch randomization
    */
   playTypingSound() {
     if (!this.enabled) return;
@@ -31,10 +32,14 @@ export class SoundManager {
 
     // Square wave for that retro 8-bit keyboard feel
     osc.type = 'square';
-    // Random pitch variation for each keystroke (800-1200 Hz)
-    osc.frequency.value = 800 + Math.random() * 400;
+    // Enhanced random pitch variation for more realistic typing (700-1300 Hz)
+    // Each keystroke has a unique character
+    const basePitch = 900 + (Math.random() - 0.5) * 600;
+    osc.frequency.value = basePitch;
 
-    gain.gain.setValueAtTime(0.05, now);
+    // Slightly randomize volume too (0.03-0.06)
+    const volume = 0.03 + Math.random() * 0.03;
+    gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
     osc.connect(gain);
@@ -72,6 +77,7 @@ export class SoundManager {
 
   /**
    * Play a notification chime (pleasant ascending notes)
+   * Used for general notifications
    */
   playNotificationChime() {
     if (!this.enabled) return;
@@ -99,35 +105,98 @@ export class SoundManager {
   }
 
   /**
-   * Play a task complete chime (short ascending arpeggio)
+   * Play a pleasant chime when a new agent joins the office
+   * Warm, welcoming three-note ascending melody
    */
-  playTaskCompleteChime() {
+  playAgentJoinedChime() {
     if (!this.enabled) return;
 
     const now = this.audioContext.currentTime;
-    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 - major triad
+    // D5, F#5, A5 - D major triad, warm and welcoming
+    const notes = [587.33, 739.99, 880.00];
 
     notes.forEach((freq, i) => {
       const osc = this.audioContext.createOscillator();
       const gain = this.audioContext.createGain();
 
-      osc.type = 'triangle';
+      osc.type = 'sine'; // Pure sine wave for warmth
       osc.frequency.value = freq;
 
-      const startTime = now + i * 0.08;
+      const startTime = now + i * 0.12; // Slightly slower for elegance
       gain.gain.setValueAtTime(0.1, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.25);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
 
       osc.connect(gain);
       gain.connect(this.masterGain);
 
       osc.start(startTime);
-      osc.stop(startTime + 0.25);
+      osc.stop(startTime + 0.4);
+    });
+  }
+
+  /**
+   * Play a subtle conflict warning sound
+   * Two quick descending tones to indicate something needs attention
+   */
+  playConflictWarning() {
+    if (!this.enabled) return;
+
+    const now = this.audioContext.currentTime;
+    // G4 to D4 - descending perfect fifth, creates subtle tension
+    const notes = [392.00, 293.66];
+
+    notes.forEach((freq, i) => {
+      const osc = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+
+      osc.type = 'triangle'; // Slightly sharper for attention
+      osc.frequency.value = freq;
+
+      const startTime = now + i * 0.08; // Quick succession
+      gain.gain.setValueAtTime(0.09, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.15);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.15);
+    });
+  }
+
+  /**
+   * Play a soft task complete sound
+   * Gentle ascending three-note melody that feels satisfying but not intrusive
+   */
+  playTaskCompleteChime() {
+    if (!this.enabled) return;
+
+    const now = this.audioContext.currentTime;
+    // E5, G5, B5 - E minor pentatonic, soft and pleasant
+    const notes = [659.25, 783.99, 987.77];
+
+    notes.forEach((freq, i) => {
+      const osc = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+
+      osc.type = 'sine'; // Pure sine for softness
+      osc.frequency.value = freq;
+
+      const startTime = now + i * 0.09; // Gentle pacing
+      gain.gain.setValueAtTime(0.07, startTime); // Quieter than before
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.35);
     });
   }
 
   /**
    * Start a very subtle ambient background hum
+   * Lowered volume to be less intrusive
    */
   startAmbientHum() {
     if (!this.enabled || this.ambientOscillator) return;
@@ -141,9 +210,9 @@ export class SoundManager {
     this.ambientOscillator.type = 'sine';
     this.ambientOscillator.frequency.value = 60; // Very low hum (60 Hz)
 
-    // Extremely quiet - barely noticeable
+    // Even quieter than before - should be almost subliminal
     this.ambientGain.gain.setValueAtTime(0, now);
-    this.ambientGain.gain.linearRampToValueAtTime(0.015, now + 2); // Fade in over 2 seconds
+    this.ambientGain.gain.linearRampToValueAtTime(0.008, now + 2); // Reduced from 0.015 to 0.008
 
     this.ambientOscillator.connect(this.ambientGain);
     this.ambientGain.connect(this.masterGain);
