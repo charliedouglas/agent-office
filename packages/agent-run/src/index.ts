@@ -9,6 +9,11 @@ import {
   updateState,
   getInjectedInstructions,
 } from './state.js';
+import {
+  registerAgent,
+  unregisterAgent,
+  updateAgentAPI,
+} from './api-client.js';
 
 const program = new Command();
 
@@ -53,7 +58,16 @@ async function main() {
     const agentDir = await ensureAgentDir(projectRoot);
 
     // Create initial agent state
-    await createInitialState(agentDir, name, team, task);
+    const initialState = await createInitialState(agentDir, name, team, task);
+
+    // Register agent with REST API (in addition to file-based state)
+    try {
+      await registerAgent(name, team, task);
+      console.log(`[agent-run] Registered agent with API`);
+    } catch (error) {
+      console.warn(`[agent-run] Warning: Failed to register with API:`, error instanceof Error ? error.message : String(error));
+      console.warn(`[agent-run] Continuing with file-based state only...`);
+    }
 
     // Get injected instructions
     const injectedInstructions = getInjectedInstructions(agentDir, name);
@@ -82,6 +96,13 @@ async function main() {
     // Update state to typing before spawning
     await updateState(agentDir, name, { state: 'typing' });
 
+    // Also update API
+    try {
+      await updateAgentAPI(name, { state: 'typing' });
+    } catch (error) {
+      // Silently ignore API errors
+    }
+
     // Spawn the child process
     const child = spawn(command, modifiedArgs, {
       stdio: 'inherit', // Pipe stdio through
@@ -100,6 +121,14 @@ async function main() {
         // because the agent should be updating its own state during execution
       });
 
+      // Unregister from API
+      try {
+        await unregisterAgent(name);
+        console.log(`[agent-run] Unregistered agent from API`);
+      } catch (error) {
+        // Silently ignore API errors
+      }
+
       console.log(`[agent-run] Agent ${name} state updated to idle`);
       process.exit(code ?? 0);
     });
@@ -108,6 +137,14 @@ async function main() {
     child.on('error', async (err) => {
       console.error(`[agent-run] Error spawning process: ${err.message}`);
       await updateState(agentDir, name, { state: 'idle' });
+
+      // Unregister from API
+      try {
+        await unregisterAgent(name);
+      } catch (error) {
+        // Silently ignore API errors
+      }
+
       process.exit(1);
     });
   } catch (error) {
