@@ -59,9 +59,8 @@ if (fs.existsSync(agentDir)) {
   // Check if there are any JSON files
   const files = fs.readdirSync(agentDir).filter(f => f.endsWith('.json'));
   console.log(`[Init] Found ${files.length} JSON files`);
-  if (files.length > 0) {
-    useRealMode = true;
-  }
+  // Use real mode if .agent/ directory exists, regardless of file count
+  useRealMode = true;
 } else {
   console.log(`[Init] .agent/ directory not found`);
 }

@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { AgentState } from './types.js';
+import type { AgentFileData } from './types.js';
 
 export async function ensureAgentDir(projectRoot: string): Promise<string> {
   const agentDir = path.join(projectRoot, '.agent');
@@ -14,8 +14,8 @@ export async function createInitialState(
   name: string,
   team: string,
   task: string
-): Promise<AgentState> {
-  const state: AgentState = {
+): Promise<AgentFileData> {
+  const state: AgentFileData = {
     id: randomUUID(),
     name,
     team,
@@ -34,11 +34,11 @@ export async function createInitialState(
 export async function updateState(
   agentDir: string,
   name: string,
-  updates: Partial<AgentState>
+  updates: Partial<AgentFileData>
 ): Promise<void> {
   const statePath = path.join(agentDir, `${name}.json`);
 
-  let state: AgentState;
+  let state: AgentFileData;
   try {
     const content = await fs.readFile(statePath, 'utf-8');
     state = JSON.parse(content);
@@ -47,7 +47,7 @@ export async function updateState(
     return;
   }
 
-  const updatedState: AgentState = {
+  const updatedState: AgentFileData = {
     ...state,
     ...updates,
     updatedAt: new Date().toISOString(),
@@ -71,9 +71,9 @@ After each significant step or action, update this JSON file with your current p
   "task": "your-task",
   "state": "typing" | "idle",
   "plan": [
-    {"text": "Step description", "status": "todo"},
+    {"text": "Step description", "status": "pending"},
     {"text": "Another step", "status": "in_progress"},
-    {"text": "Completed step", "status": "done"}
+    {"text": "Completed step", "status": "completed"}
   ],
   "currentFile": "path/to/file/you/are/working/on",
   "updatedAt": "ISO timestamp"
@@ -82,7 +82,7 @@ After each significant step or action, update this JSON file with your current p
 Guidelines:
 - Set state to "typing" when actively working, "idle" when waiting or done
 - Keep your plan updated with all major steps
-- Mark steps as "todo", "in_progress", or "done" as you progress
+- Mark steps as "pending", "in_progress", or "completed" as you progress
 - Update currentFile to the file you're currently editing
 - Update the file after each completed step, not just at the end
 

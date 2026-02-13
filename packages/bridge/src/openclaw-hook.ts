@@ -1,9 +1,36 @@
 import fs from 'fs/promises';
+import { existsSync } from 'fs';
 import path from 'path';
-import os from 'os';
 import type { Agent } from '../../../shared/types.js';
 
-const AGENTS_DIR = path.join(os.homedir(), '.agent');
+/**
+ * Find project root by looking for .agent directory
+ */
+function findProjectRoot(): string {
+  let current = process.cwd();
+
+  // Try current directory first
+  if (existsSync(path.join(current, '.agent'))) {
+    return current;
+  }
+
+  // Try parent directory (for when running from packages/bridge)
+  const parent = path.dirname(current);
+  if (existsSync(path.join(parent, '.agent'))) {
+    return parent;
+  }
+
+  // Try grandparent directory (for deeply nested structures)
+  const grandparent = path.dirname(parent);
+  if (existsSync(path.join(grandparent, '.agent'))) {
+    return grandparent;
+  }
+
+  // Default to current directory
+  return current;
+}
+
+const AGENTS_DIR = path.join(findProjectRoot(), '.agent');
 
 /**
  * Ensures the .agent directory exists

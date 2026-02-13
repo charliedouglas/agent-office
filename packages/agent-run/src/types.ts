@@ -1,15 +1,17 @@
-export interface PlanStep {
-  text: string;
-  status: 'todo' | 'in_progress' | 'done';
-}
+// Re-export shared types for convenience
+export type { Agent, PlanItem, AgentState } from '../../../shared/types.js';
 
-export interface AgentState {
+// File format for .agent/<name>.json
+export interface AgentFileData {
   id: string;
   name: string;
   team: string;
   task: string;
   state: 'typing' | 'idle';
-  plan: PlanStep[];
+  plan: Array<{
+    text: string;
+    status: 'pending' | 'in_progress' | 'completed';
+  }>;
   currentFile?: string;
   updatedAt: string;
 }
