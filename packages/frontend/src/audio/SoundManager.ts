@@ -9,6 +9,7 @@ export class SoundManager {
   private volume: number = 0.3; // Start at 30% to be subtle
   private ambientOscillator: OscillatorNode | null = null;
   private ambientGain: GainNode | null = null;
+  private isMuted: boolean = true;
 
   constructor() {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();

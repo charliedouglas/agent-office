@@ -47,6 +47,7 @@ export type WSEventType =
   | 'agent_message'
   | 'user_message'
   | 'task_updated'
+  | 'agent_removed'
   | 'init';
 
 export interface WSEvent {
@@ -83,6 +84,13 @@ export interface TaskUpdatedEvent extends WSEvent {
   payload: Task;
 }
 
+export interface AgentRemovedEvent extends WSEvent {
+  type: 'agent_removed';
+  payload: {
+    agentId: string;
+  };
+}
+
 export interface InitEvent extends WSEvent {
   type: 'init';
   payload: {
@@ -96,4 +104,5 @@ export type WSEventPayload =
   | AgentMovingEvent
   | AgentMessageEvent
   | TaskUpdatedEvent
+  | AgentRemovedEvent
   | InitEvent;

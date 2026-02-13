@@ -475,4 +475,25 @@ ID: ${task.id}
       this.renderAllTasks();
     }
   }
+
+  removeTasksForAgent(agentId: string) {
+    // Remove all tasks assigned to this agent
+    const tasksToRemove: string[] = [];
+
+    for (const [taskId, card] of this.tasks.entries()) {
+      if (card.task.assignedTo === agentId || card.task.agentId === agentId) {
+        tasksToRemove.push(taskId);
+      }
+    }
+
+    // Delete the tasks
+    tasksToRemove.forEach(taskId => this.tasks.delete(taskId));
+
+    // Re-render if overlay is open
+    if (this.isOpen && tasksToRemove.length > 0) {
+      this.renderAllTasks();
+    }
+
+    console.log(`[TaskBoard] Removed ${tasksToRemove.length} tasks for agent ${agentId}`);
+  }
 }

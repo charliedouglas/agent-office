@@ -336,6 +336,44 @@ export class Agent extends Phaser.GameObjects.Container {
     this.clickCallback = callback;
   }
 
+  leave(onComplete?: () => void) {
+    // Clean up typing animation and sounds
+    if (this.typingTween) {
+      this.typingTween.stop();
+      this.typingTween = null;
+    }
+    if (this.typingSoundTimer) {
+      this.typingSoundTimer.remove();
+      this.typingSoundTimer = null;
+    }
+
+    // Walk towards bottom of screen first
+    const exitY = 14; // Near bottom wall
+    const walkDuration = 800;
+
+    this.updateState('walking');
+
+    this.scene.tweens.add({
+      targets: this,
+      y: exitY * TILE,
+      duration: walkDuration,
+      ease: 'Quad.easeInOut',
+      onComplete: () => {
+        // Then fade out
+        this.scene.tweens.add({
+          targets: this,
+          alpha: 0,
+          duration: 500,
+          ease: 'Quad.easeIn',
+          onComplete: () => {
+            this.destroy();
+            onComplete?.();
+          }
+        });
+      }
+    });
+  }
+
   private hashCode(str: string): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {

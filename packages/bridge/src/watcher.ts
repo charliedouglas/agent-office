@@ -1,5 +1,6 @@
 import chokidar from 'chokidar';
 import path from 'path';
+import fs from 'fs';
 import { bridgeEvents } from './events.js';
 import { parseAgentFile, AgentFileData } from './parser.js';
 import { detectCollaborations } from './collaboration.js';
@@ -63,8 +64,12 @@ export function startWatcher(agentDir: string) {
     .on('unlink', (filePath) => {
       if (!filePath.endsWith('.json')) return;
 
-      console.log(`[Watcher] File removed: ${path.basename(filePath)}`);
       const agentId = path.basename(filePath, '.json');
+      console.log(`[Lifecycle] Agent ${agentId} removed - file deleted`);
+
+      // Get agent name before deletion for logging
+      const agent = agentState.get(agentId);
+      const agentName = agent?.name || agentId;
 
       // Remove agent and their tasks
       agentState.delete(agentId);
@@ -77,12 +82,20 @@ export function startWatcher(agentDir: string) {
         }
       }
 
-      // Re-emit init to update clients
-      emitInitState();
+      // Emit agent_removed event to notify clients
+      bridgeEvents.emitWSEvent({
+        type: 'agent_removed',
+        payload: { agentId }
+      });
+
+      console.log(`[Lifecycle] Agent ${agentName} cleanup complete`);
     })
     .on('error', (error) => {
       console.error(`[Watcher] Error:`, error);
     });
+
+  // Start stale agent detection
+  startStaleAgentDetection(agentDir);
 
   return watcher;
 }
@@ -234,6 +247,61 @@ function handlePlanUpdate(data: AgentFileData) {
       }
     }
   });
+}
+
+function startStaleAgentDetection(agentDir: string) {
+  const STALE_THRESHOLD = 2 * 60 * 1000; // 2 minutes
+  const REMOVAL_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+  const CHECK_INTERVAL = 30 * 1000; // 30 seconds
+
+  // Track when agents were first marked as stale
+  const staleTimestamps = new Map<string, number>();
+
+  setInterval(() => {
+    const now = Date.now();
+
+    for (const [agentId, agent] of agentState.entries()) {
+      const agentFilePath = path.join(agentDir, `${agentId}.json`);
+
+      try {
+        const stats = fs.statSync(agentFilePath);
+        const lastModified = stats.mtimeMs;
+        const timeSinceModification = now - lastModified;
+
+        if (timeSinceModification >= STALE_THRESHOLD) {
+          // Mark as stale if not already marked
+          if (!staleTimestamps.has(agentId)) {
+            staleTimestamps.set(agentId, now);
+            console.log(`[Lifecycle] Agent ${agent.name} (${agentId}) is stale - no activity for ${Math.floor(timeSinceModification / 1000)}s`);
+          }
+
+          const staleDuration = now - staleTimestamps.get(agentId)!;
+
+          // Remove if stale for too long
+          if (staleDuration >= REMOVAL_THRESHOLD) {
+            console.log(`[Lifecycle] Agent ${agent.name} (${agentId}) stale for ${Math.floor(staleDuration / 1000)}s, removing`);
+            staleTimestamps.delete(agentId);
+
+            // Delete the agent file (triggers unlink event)
+            fs.unlinkSync(agentFilePath);
+          }
+        } else {
+          // Agent is active, remove from stale tracking
+          if (staleTimestamps.has(agentId)) {
+            console.log(`[Lifecycle] Agent ${agent.name} (${agentId}) is active again`);
+            staleTimestamps.delete(agentId);
+          }
+        }
+      } catch (error) {
+        // File doesn't exist or can't be accessed
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          staleTimestamps.delete(agentId);
+        }
+      }
+    }
+  }, CHECK_INTERVAL);
+
+  console.log('[Lifecycle] Stale agent detection started (2min stale, 5min removal)');
 }
 
 function emitInitState() {

@@ -385,6 +385,57 @@ export class OfficeScene extends Phaser.Scene {
         );
       }
     });
+
+    this.socket.on('agent_removed', (payload: { agentId: string }) => {
+      const agent = this.agents.get(payload.agentId);
+      if (!agent) {
+        console.log('[Office] Agent removal requested but agent not found:', payload.agentId);
+        return;
+      }
+
+      const agentData = agent.getData();
+      const agentName = agentData.name;
+      const teamColor = getTeamColor(agentData.team);
+
+      console.log('[Office] Agent leaving:', agentName);
+
+      // Close detail panel if this agent is shown
+      if (this.currentChatAgent === agent) {
+        this.agentDetailPanel.hide();
+        this.currentChatAgent = null;
+      }
+
+      // Remove agent's tasks from task board
+      this.taskBoard.removeTasksForAgent(payload.agentId);
+
+      // Play leave animation and remove from map
+      agent.leave(() => {
+        this.agents.delete(payload.agentId);
+        console.log('[Office] Agent removed:', agentName);
+      });
+
+      // Show toast notification
+      this.toastManager.show(
+        agentName,
+        'has left the office',
+        'info',
+        teamColor
+      );
+
+      // Remove desk (find and destroy)
+      const desk = this.desks.find(d =>
+        d.x === agentData.deskPosition.x * 32 &&
+        d.y === agentData.deskPosition.y * 32
+      );
+      if (desk) {
+        desk.destroy();
+        this.desks = this.desks.filter(d => d !== desk);
+      }
+
+      // Redraw team zones without this agent
+      const remainingAgents = Array.from(this.agents.values()).map(a => a.getData());
+      this.drawTeamZones(remainingAgents);
+    });
   }
 
   /** Check if any agent's desk is at this tile */

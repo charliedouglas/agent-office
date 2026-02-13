@@ -3,10 +3,18 @@ import Phaser from 'phaser';
 const TILE = 32;
 
 export class Desk {
+  public x: number;
+  public y: number;
+  private graphics: Phaser.GameObjects.Graphics;
+
   constructor(scene: Phaser.Scene, tileX: number, tileY: number, teamColor: number = 0x666666) {
     const g = scene.add.graphics();
     const px = tileX * TILE;
     const py = tileY * TILE;
+
+    this.x = px;
+    this.y = py;
+    this.graphics = g;
 
     // Desk surface (dark wood)
     g.fillStyle(0x5c4033, 1);
@@ -33,5 +41,11 @@ export class Desk {
     g.fillCircle(px, py + 22, 5);
     g.fillStyle(0x444455, 1);
     g.fillCircle(px, py + 22, 3);
+  }
+
+  destroy() {
+    if (this.graphics) {
+      this.graphics.destroy();
+    }
   }
 }
