@@ -219,6 +219,13 @@ function computeDeskPosition(team: string, agentId: string): { x: number; y: num
   };
 }
 
+function normaliseStatus(status: string): 'pending' | 'in_progress' | 'completed' {
+  const s = status.toLowerCase().replace(/[^a-z_]/g, '');
+  if (s === 'done' || s === 'completed') return 'completed';
+  if (s === 'inprogress' || s === 'in_progress') return 'in_progress';
+  return 'pending';
+}
+
 function handlePlanUpdate(data: AgentFileData) {
   if (!data.plan) return;
 
@@ -231,7 +238,7 @@ function handlePlanUpdate(data: AgentFileData) {
       id: taskId,
       description: item.text,
       assignedTo: data.id,
-      status: item.status as 'pending' | 'in_progress' | 'completed'
+      status: normaliseStatus(item.status)
     };
 
     // Only emit if status changed or new task
