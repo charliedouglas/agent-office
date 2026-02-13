@@ -186,13 +186,14 @@ function computeDeskPosition(team: string, agentId: string): { x: number; y: num
 
   // Define team zones (matching mock mode layout)
   const teamZones: Record<string, { baseX: number; baseY: number; cols: number }> = {
-    engineering: { baseX: 3, baseY: 3, cols: 2 },
-    frontend: { baseX: 3, baseY: 3, cols: 2 },
-    backend: { baseX: 3, baseY: 3, cols: 2 },
-    design: { baseX: 13, baseY: 3, cols: 2 },
-    qa: { baseX: 13, baseY: 10, cols: 2 },
-    management: { baseX: 3, baseY: 11, cols: 1 },
-    default: { baseX: 8, baseY: 7, cols: 2 }
+    engineering: { baseX: 2, baseY: 3, cols: 2 },
+    frontend: { baseX: 2, baseY: 3, cols: 2 },
+    backend: { baseX: 10, baseY: 3, cols: 2 },
+    design: { baseX: 15, baseY: 3, cols: 2 },
+    devops: { baseX: 15, baseY: 8, cols: 2 },
+    qa: { baseX: 10, baseY: 8, cols: 2 },
+    management: { baseX: 2, baseY: 11, cols: 1 },
+    default: { baseX: 6, baseY: 8, cols: 2 }
   };
 
   const zone = teamZones[team.toLowerCase()] || teamZones.default;
