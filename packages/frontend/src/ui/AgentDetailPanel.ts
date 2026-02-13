@@ -19,6 +19,7 @@ export class AgentDetailPanel {
   private agentData: AgentData | null = null;
   private onClose: (() => void) | null = null;
   private onSendMessage: ((message: string) => void) | null = null;
+  private onShowToast: ((name: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => void) | null = null;
   private updateInterval: number | null = null;
 
   constructor(scene: Phaser.Scene) {
@@ -28,11 +29,13 @@ export class AgentDetailPanel {
   show(
     agentData: AgentData,
     onSendMessage: (message: string) => void,
-    onClose: () => void
+    onClose: () => void,
+    onShowToast?: (name: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => void
   ) {
     this.agentData = agentData;
     this.onSendMessage = onSendMessage;
     this.onClose = onClose;
+    this.onShowToast = onShowToast || null;
 
     // Remove existing panel if present
     this.hide();
@@ -90,6 +93,7 @@ export class AgentDetailPanel {
     this.agentData = null;
     this.onSendMessage = null;
     this.onClose = null;
+    this.onShowToast = null;
   }
 
   isVisible(): boolean {
@@ -286,16 +290,34 @@ export class AgentDetailPanel {
 
       if (response.ok) {
         console.log('[AgentDetailPanel] Agent killed:', this.agentData.name);
+
+        // Show warning toast
+        if (this.onShowToast) {
+          this.onShowToast(this.agentData.name, 'disconnected', 'warning');
+        }
+
         this.hide();
         if (this.onClose) {
           this.onClose();
         }
       } else {
         const errorText = await response.text();
+
+        // Show error toast
+        if (this.onShowToast) {
+          this.onShowToast(this.agentData.name, `kill failed: ${errorText}`, 'error');
+        }
+
         alert(`Failed to kill agent: ${errorText}`);
       }
     } catch (err) {
       console.error('[AgentDetailPanel] Error killing agent:', err);
+
+      // Show error toast
+      if (this.onShowToast && this.agentData) {
+        this.onShowToast(this.agentData.name, `kill error: ${err}`, 'error');
+      }
+
       alert(`Error killing agent: ${err}`);
     }
   };

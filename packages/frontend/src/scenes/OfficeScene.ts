@@ -6,6 +6,7 @@ import { SocketClient } from '../network/Socket';
 import { ChatInput } from '../ui/ChatInput';
 import { ActivityFeed } from '../ui/ActivityFeed';
 import { AgentDetailPanel } from '../ui/AgentDetailPanel';
+import { ToastManager } from '../ui/ToastManager';
 import { SoundManager } from '../audio/SoundManager';
 import type { Agent as AgentData, Task } from '../../../../shared/types';
 
@@ -38,6 +39,7 @@ export class OfficeScene extends Phaser.Scene {
   private muteButton!: Phaser.GameObjects.Container;
   private activityFeed!: ActivityFeed;
   private agentDetailPanel!: AgentDetailPanel;
+  private toastManager!: ToastManager;
 
   constructor() {
     super({ key: 'OfficeScene' });
@@ -57,6 +59,9 @@ export class OfficeScene extends Phaser.Scene {
 
     // Create activity feed
     this.activityFeed = new ActivityFeed(this);
+
+    // Create toast manager
+    this.toastManager = new ToastManager(this);
 
     // Create mute/volume toggle button
     this.createMuteButton();
@@ -198,6 +203,7 @@ export class OfficeScene extends Phaser.Scene {
     this.socket.on('agent_state_changed', (payload: { agentId: string; state: any; currentFile?: string; plan?: any; currentTask?: string }) => {
       const agent = this.agents.get(payload.agentId);
       if (agent) {
+        const previousState = agent.getData().state;
         agent.updateState(payload.state);
 
         // Update agent data with any additional fields
@@ -216,6 +222,17 @@ export class OfficeScene extends Phaser.Scene {
         // Log to activity feed
         const agentData = agent.getData();
         this.activityFeed.addStateChange(agentData.name, payload.state, agentData.currentFile);
+
+        // Show toast when agent goes idle after typing (finished working)
+        if (previousState === 'typing' && payload.state === 'idle') {
+          const teamColor = getTeamColor(agentData.team);
+          this.toastManager.show(
+            agentData.name,
+            'finished working',
+            'info',
+            teamColor
+          );
+        }
       }
     });
 
@@ -275,6 +292,18 @@ export class OfficeScene extends Phaser.Scene {
 
       // Log to activity feed
       this.activityFeed.addTaskUpdate(payload.description, payload.status, payload.agentName);
+
+      // Show success toast when task is completed
+      if (payload.status === 'completed' && payload.agentName) {
+        const agent = Array.from(this.agents.values()).find(a => a.getName() === payload.agentName);
+        const teamColor = agent ? getTeamColor(agent.getData().team) : undefined;
+        this.toastManager.show(
+          payload.agentName,
+          `completed: ${payload.description}`,
+          'success',
+          teamColor
+        );
+      }
     });
   }
 
@@ -332,7 +361,11 @@ export class OfficeScene extends Phaser.Scene {
     this.agentDetailPanel.show(
       agent.getData(),
       (message) => this.handleSendMessage(agent, message),
-      () => { this.currentChatAgent = null; }
+      () => { this.currentChatAgent = null; },
+      (name: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => {
+        const teamColor = getTeamColor(agent.getData().team);
+        this.toastManager.show(name, message, type, teamColor);
+      }
     );
   }
 
