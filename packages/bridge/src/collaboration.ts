@@ -15,6 +15,9 @@ interface CollaborationPair {
 // Track current collaborations (agents visiting each other)
 const activeCollaborations = new Map<string, CollaborationPair>();
 
+// Track current file conflicts (2+ agents on same file)
+const activeConflicts = new Map<string, string[]>(); // file -> agentIds
+
 /**
  * Generate a unique key for a collaboration pair (order-independent)
  */
@@ -46,6 +49,28 @@ export function detectCollaborations(agents: Agent[]) {
   for (const [file, agentsOnFile] of fileToAgents.entries()) {
     if (agentsOnFile.length < 2) continue;
 
+    // Detect file conflicts (2+ agents on same file)
+    const agentIds = agentsOnFile.map(a => a.id);
+    if (agentsOnFile.length >= 2) {
+      const existingConflict = activeConflicts.get(file);
+      const conflictChanged = !existingConflict ||
+        existingConflict.length !== agentIds.length ||
+        !agentIds.every(id => existingConflict.includes(id));
+
+      if (conflictChanged) {
+        // New conflict or changed conflict
+        activeConflicts.set(file, agentIds);
+        bridgeEvents.emitWSEvent({
+          type: 'file_conflict',
+          payload: {
+            file,
+            agentIds
+          }
+        });
+        console.log(`[Conflict] File conflict detected: ${agentsOnFile.map(a => a.name).join(', ')} on ${file}`);
+      }
+    }
+
     // For each pair of agents on this file
     for (let i = 0; i < agentsOnFile.length; i++) {
       for (let j = i + 1; j < agentsOnFile.length; j++) {
@@ -73,6 +98,25 @@ export function detectCollaborations(agents: Agent[]) {
     if (!currentCollaborations.has(key)) {
       endCollaboration(collaboration, agents);
       activeCollaborations.delete(key);
+    }
+  }
+
+  // Check for resolved conflicts
+  for (const [file, agentIds] of activeConflicts.entries()) {
+    const currentAgentsOnFile = fileToAgents.get(file);
+    const stillInConflict = currentAgentsOnFile && currentAgentsOnFile.length >= 2;
+
+    if (!stillInConflict) {
+      // Conflict resolved
+      bridgeEvents.emitWSEvent({
+        type: 'file_conflict_resolved',
+        payload: {
+          file,
+          agentIds
+        }
+      });
+      console.log(`[Conflict] File conflict resolved: ${file}`);
+      activeConflicts.delete(file);
     }
   }
 }
@@ -152,4 +196,5 @@ function endCollaboration(collaboration: CollaborationPair, agents: Agent[]) {
  */
 export function clearCollaborations() {
   activeCollaborations.clear();
+  activeConflicts.clear();
 }

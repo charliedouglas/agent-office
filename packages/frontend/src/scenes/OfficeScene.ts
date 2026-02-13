@@ -41,6 +41,7 @@ export class OfficeScene extends Phaser.Scene {
   private agentDetailPanel!: AgentDetailPanel;
   private toastManager!: ToastManager;
   private clockText!: Phaser.GameObjects.Text;
+  private conflictWarnings: Map<string, Phaser.GameObjects.Container> = new Map();
 
   constructor() {
     super({ key: 'OfficeScene' });
@@ -436,6 +437,39 @@ export class OfficeScene extends Phaser.Scene {
       const remainingAgents = Array.from(this.agents.values()).map(a => a.getData());
       this.drawTeamZones(remainingAgents);
     });
+
+    this.socket.on('file_conflict', (payload: { file: string; agentIds: string[] }) => {
+      console.log('[Office] File conflict:', payload.file, payload.agentIds);
+
+      // Get agent names
+      const agentNames = payload.agentIds
+        .map(id => this.agents.get(id)?.getData().name)
+        .filter(name => name !== undefined) as string[];
+
+      if (agentNames.length === 0) return;
+
+      // Show toast warning
+      this.toastManager.showConflictWarning(payload.file, agentNames);
+
+      // Add to activity feed
+      this.activityFeed.addConflict(payload.file, agentNames);
+
+      // Create visual warning indicators near conflicting agents
+      this.createConflictWarning(payload.file, payload.agentIds);
+    });
+
+    this.socket.on('file_conflict_resolved', (payload: { file: string; agentIds: string[] }) => {
+      console.log('[Office] File conflict resolved:', payload.file);
+
+      // Show toast
+      this.toastManager.showConflictResolved(payload.file);
+
+      // Add to activity feed
+      this.activityFeed.addConflictResolved(payload.file);
+
+      // Remove visual warning
+      this.removeConflictWarning(payload.file);
+    });
   }
 
   /** Check if any agent's desk is at this tile */
@@ -609,6 +643,80 @@ export class OfficeScene extends Phaser.Scene {
     });
 
     this.muteButton = container;
+  }
+
+  private createConflictWarning(file: string, agentIds: string[]) {
+    // Remove existing warning for this file if any
+    this.removeConflictWarning(file);
+
+    // Calculate center position between conflicting agents
+    let totalX = 0;
+    let totalY = 0;
+    let count = 0;
+
+    for (const agentId of agentIds) {
+      const agent = this.agents.get(agentId);
+      if (agent) {
+        totalX += agent.x;
+        totalY += agent.y;
+        count++;
+      }
+    }
+
+    if (count === 0) return;
+
+    const centerX = totalX / count;
+    const centerY = totalY / count;
+
+    // Create warning container
+    const container = this.add.container(centerX, centerY - 40);
+    container.setDepth(999);
+
+    // Warning icon background (pulsing red circle)
+    const bg = this.add.graphics();
+    bg.fillStyle(0xef4444, 0.8);
+    bg.fillCircle(0, 0, 16);
+    bg.lineStyle(2, 0xffffff, 1);
+    bg.strokeCircle(0, 0, 16);
+
+    // Warning symbol
+    const warningText = this.add.text(0, 0, '⚠️', {
+      fontSize: '20px',
+    });
+    warningText.setOrigin(0.5, 0.5);
+
+    container.add([bg, warningText]);
+
+    // Pulse animation
+    this.tweens.add({
+      targets: container,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      alpha: 0.7,
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Store the warning
+    this.conflictWarnings.set(file, container);
+  }
+
+  private removeConflictWarning(file: string) {
+    const warning = this.conflictWarnings.get(file);
+    if (warning) {
+      // Fade out animation
+      this.tweens.add({
+        targets: warning,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => {
+          warning.destroy();
+        },
+      });
+      this.conflictWarnings.delete(file);
+    }
   }
 
   update() {

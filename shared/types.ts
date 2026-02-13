@@ -48,7 +48,9 @@ export type WSEventType =
   | 'user_message'
   | 'task_updated'
   | 'agent_removed'
-  | 'init';
+  | 'init'
+  | 'file_conflict'
+  | 'file_conflict_resolved';
 
 export interface WSEvent {
   type: WSEventType;
@@ -99,10 +101,28 @@ export interface InitEvent extends WSEvent {
   };
 }
 
+export interface FileConflictEvent extends WSEvent {
+  type: 'file_conflict';
+  payload: {
+    file: string;
+    agentIds: string[];
+  };
+}
+
+export interface FileConflictResolvedEvent extends WSEvent {
+  type: 'file_conflict_resolved';
+  payload: {
+    file: string;
+    agentIds: string[];
+  };
+}
+
 export type WSEventPayload =
   | AgentStateChangedEvent
   | AgentMovingEvent
   | AgentMessageEvent
   | TaskUpdatedEvent
   | AgentRemovedEvent
-  | InitEvent;
+  | InitEvent
+  | FileConflictEvent
+  | FileConflictResolvedEvent;

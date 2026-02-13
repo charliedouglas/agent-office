@@ -136,6 +136,8 @@ export class ActivityFeed {
       'completed': '✅',
       'in_progress': '🔧',
       'pending': '⏳',
+      'conflict': '⚠️',
+      'conflict_resolved': '✅',
     };
     return emojiMap[type] || '📌';
   }
@@ -150,6 +152,8 @@ export class ActivityFeed {
       'completed': '#4ade80',   // green
       'in_progress': '#fb923c', // orange
       'pending': '#94a3b8',     // gray
+      'conflict': '#ef4444',    // red
+      'conflict_resolved': '#4ade80', // green
     };
     return colorMap[type] || '#e0e0e0';
   }
@@ -229,6 +233,22 @@ export class ActivityFeed {
       text = `Task ${status}: ${shortDesc}`;
     }
 
+    this.addEntry(emoji, text, color);
+  }
+
+  public addConflict(file: string, agentNames: string[]) {
+    const emoji = this.getEventEmoji('conflict');
+    const color = this.getEventColor('conflict');
+    const shortFile = file.length > 30 ? '...' + file.substring(file.length - 30) : file;
+    const text = `FILE CONFLICT: ${agentNames.join(', ')} on ${shortFile}`;
+    this.addEntry(emoji, text, color);
+  }
+
+  public addConflictResolved(file: string) {
+    const emoji = this.getEventEmoji('conflict_resolved');
+    const color = this.getEventColor('conflict_resolved');
+    const shortFile = file.length > 30 ? '...' + file.substring(file.length - 30) : file;
+    const text = `Conflict resolved: ${shortFile}`;
     this.addEntry(emoji, text, color);
   }
 

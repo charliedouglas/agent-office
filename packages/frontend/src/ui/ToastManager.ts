@@ -66,6 +66,61 @@ export class ToastManager {
     });
   }
 
+  /**
+   * Show a conflict warning toast
+   * @param file The file in conflict
+   * @param agentNames Names of agents in conflict
+   */
+  showConflictWarning(file: string, agentNames: string[]) {
+    // Remove oldest toast if at max capacity
+    if (this.toasts.length >= TOAST_CONFIG.maxVisible) {
+      this.dismissToast(this.toasts[0]);
+    }
+
+    const shortFile = file.length > 25 ? '...' + file.substring(file.length - 25) : file;
+    const toast = this.createToast(
+      'FILE CONFLICT',
+      `${agentNames.join(', ')} on ${shortFile}`,
+      'warning'
+    );
+    this.toasts.push(toast);
+
+    // Reposition all toasts
+    this.repositionToasts();
+
+    // Auto-dismiss after longer duration for warnings
+    toast.dismissTimer = this.scene.time.delayedCall(TOAST_CONFIG.duration * 1.5, () => {
+      this.dismissToast(toast);
+    });
+  }
+
+  /**
+   * Show a conflict resolved toast
+   * @param file The file that was in conflict
+   */
+  showConflictResolved(file: string) {
+    // Remove oldest toast if at max capacity
+    if (this.toasts.length >= TOAST_CONFIG.maxVisible) {
+      this.dismissToast(this.toasts[0]);
+    }
+
+    const shortFile = file.length > 25 ? '...' + file.substring(file.length - 25) : file;
+    const toast = this.createToast(
+      'CONFLICT RESOLVED',
+      shortFile,
+      'success'
+    );
+    this.toasts.push(toast);
+
+    // Reposition all toasts
+    this.repositionToasts();
+
+    // Auto-dismiss after duration
+    toast.dismissTimer = this.scene.time.delayedCall(TOAST_CONFIG.duration, () => {
+      this.dismissToast(toast);
+    });
+  }
+
   private createToast(
     agentName: string,
     message: string,
