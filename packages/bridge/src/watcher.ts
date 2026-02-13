@@ -188,7 +188,7 @@ function computeDeskPosition(team: string, agentId: string): { x: number; y: num
   const teamZones: Record<string, { baseX: number; baseY: number; cols: number }> = {
     engineering: { baseX: 2, baseY: 3, cols: 2 },
     frontend: { baseX: 2, baseY: 3, cols: 2 },
-    backend: { baseX: 10, baseY: 3, cols: 2 },
+    backend: { baseX: 10, baseY: 5, cols: 2 },
     design: { baseX: 15, baseY: 3, cols: 2 },
     devops: { baseX: 15, baseY: 8, cols: 2 },
     qa: { baseX: 10, baseY: 8, cols: 2 },

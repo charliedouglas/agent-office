@@ -13,8 +13,9 @@ export class SoundManager {
   constructor() {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     this.masterGain = this.audioContext.createGain();
-    this.masterGain.gain.value = this.volume;
+    this.masterGain.gain.value = 0; // Muted by default
     this.masterGain.connect(this.audioContext.destination);
+    this.isMuted = true;
   }
 
   /**
